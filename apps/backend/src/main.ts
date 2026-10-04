@@ -4,13 +4,13 @@ import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import { AppModule } from "./app.module";
 import { GlobalExceptionFilter, LoggingInterceptor, ResponseInterceptor, requestId } from "./common/http";
 
 config({ path: "apps/backend/.env" });
 config();
 
 async function bootstrap() {
+  const { AppModule } = await import("./app.module");
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix("api");
   app.use(requestId);
