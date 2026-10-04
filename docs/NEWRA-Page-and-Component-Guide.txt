@@ -1,0 +1,501 @@
+NEWRA — GES IPP COMPARATOR
+Page and component guide
+2 October 2026
+
+All values in the running application are demo / illustrative.
+Pages display API results. Scoring, suitability, load matching, tariffs,
+critical gates, and red flags are calculated in the NestJS API, not in React.
+
+
+1. HOW THE INTERFACE IS ORGANISED
+--------------------------------
+
+The web app is a Next.js App Router workspace. Authenticated pages share
+one shell. Login is a standalone screen. Two routes only redirect.
+
+Shared components
+  RootLayout          apps/web/src/app/layout.tsx
+                      Title: "NewRa | Energy Decision Platform".
+                      Wraps every route in Providers.
+
+  Providers           QueryClientProvider (TanStack Query, 15 second stale
+                      time), AuthProvider, and a Sonner toast at the top right.
+
+  AuthProvider        Holds the signed-in user. Restores the session from
+                      GET /api/auth/me. Exposes signIn and signOut.
+                      Unauthenticated workspace visits go to /login.
+
+  WorkspaceProvider   Holds the selected GES id (ges_aster, ges_nova, or
+                      ges_vertex) and selectGes. Changing the GES updates
+                      the route without a full page reload.
+
+  AppShell            Sidebar, top bar, demo ribbon, content, and footer.
+                      Used by every page except login and the two redirects.
+
+  PageHeader          Eyebrow, title, description, and an optional action slot.
+
+  LoadingState        Shown while a page query is in flight.
+                      Default label: "Loading portfolio data".
+
+  ErrorState          Shown when an API call fails, with a retry action.
+                      Permission failures use the same component.
+
+  StatusPill          Turns a status code into a labelled pill.
+                      Good, warning, and risk colours cover pass, suitable,
+                      conditional, fail, gate failed, and document statuses.
+                      Acronyms such as IPP, GES, BESS, EHV, COD, and CAPEX
+                      stay uppercase.
+
+AppShell regions
+  Brand               "newra. ENERGY DECISIONS", links to /dashboard.
+  Workspace chip      "GES evaluation" / "Illustrative portfolio".
+  Platform nav        Overview, GES accounts, IPP comparator (badge 3),
+                      Evaluations.
+  Workflow nav        Negotiation, PSOA evidence, Dealbook, Documents.
+  User row            Initials, name, role, and sign-out.
+  Top bar             Breadcrumb "Energy platform / {GES or Portfolio overview}",
+                      GES selector, notifications, settings, avatar.
+  Demo ribbon         "DEMO / ILLUSTRATIVE DATA" and
+                      "Decisions require independent evidence review".
+  Footer              "All decision scores calculated by the NewRa evaluation API".
+
+GES-scoped links are built as:
+  /ges/{selectedGesId}/comparison
+  /ges/{selectedGesId}/negotiation
+  /ges/{selectedGesId}/psoa
+  /ges/{selectedGesId}/dealbook
+
+The Documents sidebar item currently links to /documents.
+The implemented register is /ges/{gesId}/documents.
+
+
+2. ROUTE INDEX
+--------------
+
+  /                              Home              Redirects to /dashboard.
+  /login                         LoginPage         Standalone sign-in.
+  /dashboard                     DashboardPage     Portfolio totals.
+  /ges                           GesListPage       Three consumer accounts.
+  /evaluation                    EvaluationPage    Redirects to Aster comparison.
+  /ges/[gesId]/comparison        ComparisonPage    Main comparator.
+  /ges/[gesId]/negotiation       NegotiationPage   Append-only offers.
+  /ges/[gesId]/psoa              PsoaPage          Evidence checklist.
+  /ges/[gesId]/dealbook          DealbookPage      Decision record cards.
+  /ges/[gesId]/documents         DocumentsPage     Document register.
+
+
+3. LOGIN
+--------
+
+Route       /login
+File        apps/web/src/app/login/page.tsx
+Component   LoginPage
+Shell       None. Full-page two-column layout.
+API         POST /api/auth/login through AuthProvider.signIn
+
+Left panel
+  Brand mark          newra. wordmark.
+  Story chip          "ENERGY PROCUREMENT INTELLIGENCE".
+  Headline            "Make every energy decision with confidence."
+  Story steps         01 Understand the requirement.
+                      02 Compare real capability.
+                      03 Move with evidence.
+  Panel foot          "Internal NewRa workspace. Demo values are illustrative."
+
+Right panel
+  Work email          Required. Demo default admin@newra.demo.
+  Password            Required, with show/hide. Demo default NewraDemo#2026.
+  Form error          Alert when sign-in fails.
+  Sign in             Submits the form. Label becomes "Signing in..." while
+                      the request is in flight.
+  Demo access card    Repeats the demo email and password.
+  Role note           "Role-based permissions are enforced by the API."
+
+Other seeded roles use the same password:
+  evaluator@newra.demo
+  commercial@newra.demo
+  technical@newra.demo
+  finance@newra.demo
+  viewer@newra.demo
+
+
+4. HOME AND EVALUATIONS REDIRECTS
+---------------------------------
+
+Route       /
+File        apps/web/src/app/page.tsx
+Component   Home
+Behaviour   Server redirect to /dashboard. No visual components.
+
+Route       /evaluation
+File        apps/web/src/app/evaluation/page.tsx
+Component   EvaluationPage
+Behaviour   Server redirect to /ges/ges_aster/comparison.
+            The sidebar item "Evaluations" lands on the Aster comparator.
+
+
+5. DASHBOARD
+------------
+
+Route       /dashboard
+File        apps/web/src/app/dashboard/page.tsx
+Component   DashboardPage
+API         GET /api/dashboard?gesId={selected GES}
+States      LoadingState. ErrorState with retry.
+
+Page header
+  Eyebrow     "PORTFOLIO OVERVIEW · LIVE CALCULATIONS"
+  Title       "Energy decisions, in focus"
+  Action      "Open comparator" links to /ges/{gesId}/comparison
+
+MetricCard (local component)
+  Props: label, value, foot, icon, optional tone (amber, red, blue).
+
+  GES accounts          totals.gesAccounts
+                        Foot: "Illustrative consumer portfolio"
+  IPP candidates        totals.ippCandidates
+                        Foot: "Across three requirements"
+  Active evaluations    totals.activeEvaluations
+                        Foot: "GES x IPP assessments"
+  Shortlisted           totals.shortlisted
+  Pending reviews       totals.pendingReviews. Amber tone.
+  Critical risks        totals.criticalRisks. Red tone.
+  Average suitability   keyMetrics.averageSuitability for the selected GES
+  Target COD            keyMetrics.targetCodYear
+                        Foot is the selected GES name
+
+GES requirements table
+  Columns: GES account (code, name, location, business type),
+           requirement GWh, peak MW, COD, stage (StatusPill), fit percent.
+  "View all" links to /ges.
+
+Next actions
+  Each row: task title, owner, due date, StatusPill.
+  Empty state: "No open tasks."
+
+Continue your review
+  Compare providers     link to the comparator
+  Negotiation history   link to negotiation
+  Decision dealbook     link to the dealbook
+
+Alert: a strong weighted score does not clear a failed critical gate.
+
+
+6. GES ACCOUNTS
+---------------
+
+Route       /ges
+File        apps/web/src/app/ges/page.tsx
+Component   GesListPage
+API         GET /api/ges
+States      LoadingState. ErrorState "Unable to load accounts."
+
+Active requirements table
+  Header shows the account count and a "DEMO DATA" pill.
+  Columns: GES name and location, annual energy, peak demand,
+           capacity plan, target COD, technology tags, stage (StatusPill),
+           average fit, Evaluate link.
+  Evaluate goes to /ges/{id}/comparison.
+
+Seeded rows
+  Aster Manufacturing Group     Maharashtra
+  Nova Industrial Works         Gujarat
+  Vertex Metals & Engineering   Karnataka
+
+
+7. IPP COMPARATOR
+-----------------
+
+Route       /ges/[gesId]/comparison
+File        apps/web/src/app/ges/[gesId]/comparison/page.tsx
+Component   ComparisonPage
+Reads       GET /api/ges/{gesId}/comparison?ippIds=...
+Writes      PATCH requirements, PATCH provider inputs, POST tariff scenario
+Default     SunGrid, HybridGreen, and TerraGrid. Maximum three IPPs.
+
+This is the main decision screen. Charts receive typed API data.
+They do not compute scores.
+
+Local components
+  Drawer
+    Slide-over with a title and close button.
+    Used for requirements, provider inputs, and factor detail.
+
+  RadarTip
+    Custom Recharts tooltip. Shows the factor name, each selected IPP,
+    and its normalized 0-100 value.
+
+  RequirementForm
+    Annual energy, peak demand, capacity plan, target COD year,
+    storage preference (Optional, 2-4 hours, 4 hours),
+    technology preference.
+    Save calls the requirements API. The server recalculates.
+
+  IppInputForm
+    P90 GWh, quoted tariff, BESS MW, BESS MWh, duration hours,
+    CAPEX in INR crore, interest rate percent.
+    DSCR is read-only because the API calculates it.
+
+Requirement summary
+  Annual GWh, peak MW, planning GW, target COD.
+  Selected count out of 3, and the best suitability percent.
+  "Export comparison" downloads a client CSV of the comparison table.
+  "Edit requirements" opens RequirementForm.
+
+Provider selection
+  Row: checkbox, name, technology tags, suitability ring,
+       StatusPill for the critical gate.
+  A fourth IPP cannot be selected until one is cleared.
+  The comparison query refetches for the new set.
+
+Capability profile (Recharts RadarChart)
+  Axes: Execution, Financial, EHV, Engineering, FDRE, EPC, COD,
+        CAPEX, Tariff, Regulatory. Scale 0-100.
+  One polygon per selected IPP.
+  Colours from CHART_COLORS: #116f65, #dc8858, #567bb5.
+  Factor buttons open the factor drawer:
+    score / 5, normalized / 100, weight, weighted contribution,
+    status, reviewer, and evidence text.
+  "Edit provider inputs" opens IppInputForm for the focused IPP.
+
+Requirement match (horizontal BarChart)
+  Bars for the focused IPP: GES required, IPP available, Matched,
+  Surplus, Deficit, in GWh.
+  Stats: coverage percent, load match percent, available GWh.
+  Refresh refetches the comparison query.
+
+15-minute load matching (LineChart)
+  Series: GES load, IPP generation, matched generation, BESS support.
+  X axis is quarter-hour time. Y axis is MW.
+  Focus select switches among the selected IPPs without leaving the page.
+  Footnote states BESS MW/MWh when storage exists.
+  The support series stays at zero when it does not.
+
+Technology portfolio (stacked BarChart)
+  Solar MW, Wind MW, and BESS MW for every IPP, labelled by IPP code.
+
+Critical gates
+  Marker, gate name, rationale, and StatusPill
+  (PASS, CONDITIONAL, or FAIL) for the focused IPP.
+  A failed gate is independent of the numerical evaluation score.
+
+Automatically identified risks
+  Flag card: severity, title, and detail.
+  Empty state: "No active red flags".
+
+Commercial comparison table
+  Search, sort (suitability, evaluation, tariff, COD, generation), CSV.
+  Columns: IPP, technology, capacity, generation and P90, BESS,
+           tariff INR/kWh, COD, evaluation, suitability with a progress bar,
+           load match, gate, risk count.
+  Empty: "No provider matches this search."
+
+Tariff sensitivity
+  Inputs: CAPEX increase percent, interest rate in percentage points,
+          COD delay months, generation/CUF reduction percent,
+          storage cost increase percent.
+  "Apply scenario" posts to /api/ipps/{id}/tariff/scenario.
+  Readout: base tariff, scenario tariff, base DSCR, scenario DSCR.
+  Vertical BarChart of tariff components returned by the API.
+
+
+8. NEGOTIATION
+--------------
+
+Route       /ges/[gesId]/negotiation
+File        apps/web/src/app/ges/[gesId]/negotiation/page.tsx
+Component   NegotiationPage
+API         GET /api/ges/{gesId}/ipps
+            GET /api/ges/{gesId}/negotiations
+            POST /api/ges/{gesId}/negotiations/offers
+States      Loading "Loading negotiation workbench".
+            Error if commercial permission is missing.
+
+Create counter offer
+  Provider select       Required. Options are the GES candidate IPPs.
+  Counter tariff        INR/kWh, required.
+  Target COD            Year, required.
+  Commercial terms      BESS terms, payment terms, change in law,
+                        curtailment, performance guarantee,
+                        risk allocation, other terms.
+  Current indicative    Latest stored offer tariff for the selected provider.
+  Add offer version     Posts offerType COUNTER_OFFER.
+                        Previous versions stay in the list.
+                        Toast: "Offer added as a new immutable version."
+
+Offer history
+  Offer card: version, provider name, StatusPill, tariff, COD year,
+              created time, author, and payment terms.
+  Empty: "No offers yet".
+
+Trail shown on the page: requirement, shortlist, offer, counter offer,
+provider response, then accepted, rejected, or revised.
+
+
+9. PSOA EVIDENCE
+----------------
+
+Route       /ges/[gesId]/psoa
+File        apps/web/src/app/ges/[gesId]/psoa/page.tsx
+Component   PsoaPage
+API         GET candidates
+            GET /api/ges/{gesId}/psoa?ippId=
+            PATCH /api/ges/{gesId}/psoa/{ippId}
+Default     ipp_sungrid
+
+Metric cards
+  Evidence items    Count of checklist rows.
+  Verified          Items whose status is VERIFIED.
+  Outstanding       Items that are not verified.
+  Readiness         "Ready" or "In progress".
+                    The foot states that the checklist does not approve the deal.
+
+Evidence list
+  Each row: step index, item name, StatusPill, and a status select
+  (Pending, Received, Verified, Exception).
+  Changing a status patches that item only.
+  The evaluation stage is not overwritten.
+
+Checklist topics include corporate credentials, comparable projects,
+financial evidence, technical evidence, generation methodology, and
+the remaining items through NewRa integration.
+
+
+10. DEALBOOK
+------------
+
+Route       /ges/[gesId]/dealbook
+File        apps/web/src/app/ges/[gesId]/dealbook/page.tsx
+Component   DealbookPage
+API         GET /api/ges/{gesId}/dealbook
+States      Loading "Compiling decision record".
+            ErrorState if compilation fails.
+
+Page actions
+  Export record   Downloads a plain-text summary: evaluation, suitability,
+                  tariff, gates, and risks.
+  Alert           "The dealbook summarizes demo evidence only. Formal
+                  approvals and project-specific connectivity are not implied."
+
+Dealbook card (one per returned IPP)
+  Head            IPP code, GES code, IPP name, GES name, suitability percent.
+  Metrics         IPP evaluation / 100, annual and P90 GWh,
+                  indicative tariff, COD year.
+  Critical gates  First four gates with StatusPill, plus a count of gates
+                  that are not PASS.
+  Decision evidence  First three documents with StatusPill and a document count.
+  Risk strip      Shown when red flags exist: count and up to two titles.
+
+The API record also carries technical, financial, generation, BESS, EHV,
+negotiation history, tasks, and conditions. The card shows the decision
+summary. The full payload stays on the dealbook response.
+
+
+11. DOCUMENT REGISTER
+---------------------
+
+Route       /ges/[gesId]/documents
+File        apps/web/src/app/ges/[gesId]/documents/page.tsx
+Component   DocumentsPage
+API         GET /api/ges/{gesId}/documents
+            PATCH /api/documents/{id}
+States      Loading "Loading document register".
+            Error if the role lacks document access.
+
+Metric cards
+  Documents       Row count across the GES-IPP evaluations.
+  Under review    Rows with status UNDER_REVIEW.
+  Waiting         Rows with status PENDING.
+
+Evidence and submissions table
+  Columns: title and comments, category, version, owner, pending from,
+           StatusPill, source location, status select.
+  Status options: Requested, Pending, Received, Under review, Verified,
+                  Rejected, Expired.
+
+Updating a document status does not change the IPP evaluation stage.
+The comparison query is invalidated so evidence context can refresh.
+
+
+12. CHART AND STATUS BEHAVIOUR
+------------------------------
+
+Chart theme
+  apps/web/src/constants/demo.ts exports CHART_COLORS.
+  Comparison polygons use that list in selection order.
+  Unselected IPPs are omitted from the radar.
+
+Radar scale
+  Normalized score = rating / 5 x 100.
+  The tooltip reads the same value the polygon plots.
+
+Load-match chart
+  96 intervals. BESS support is a dashed line and is zero when the IPP
+  has no storage.
+
+Technology mix
+  Stacked solar, wind, and BESS megawatts.
+  Colours local to that chart: #deae63, #548f80, #7289ae.
+
+Tariff chart
+  Component amounts in INR/kWh from the latest saved scenario, or the
+  base build-up when no scenario exists.
+
+StatusPill classes
+  status-good, status-warn, status-risk, status-neutral.
+  GATE_FAILED renders as "Gate Failed" in the risk style.
+
+
+13. WHAT IS NOT A SEPARATE PAGE
+-------------------------------
+
+Technical, generation, FDRE, BESS, EHV, execution, CAPEX, finance, tariff,
+and regulatory review live inside the comparator drawers, charts, gates,
+and dealbook cards. These outline routes are not separate Next.js pages:
+
+  /ges/create
+      No create-GES form page.
+
+  /ges/[gesId]
+      No standalone GES detail with overview tabs.
+      The list links straight to the comparator.
+
+  /ges/[gesId]/ipps and /ges/[gesId]/ipps/[ippId]
+      No separate IPP list or IPP detail page.
+      Providers are selected on the comparator.
+
+  Module routes
+      No standalone pages for requirements, load profile, technical,
+      generation, FDRE, BESS, EHV, execution, CAPEX, finance, tariff,
+      or regulatory.
+
+Those subjects are still represented through requirement editing, the
+15-minute chart, technology mix, tariff sensitivity, gates, and the
+dealbook record.
+
+
+14. DATA THE PAGES DEPEND ON
+----------------------------
+
+Demo GES
+  Aster Manufacturing Group
+  Nova Industrial Works
+  Vertex Metals & Engineering
+
+Demo IPPs
+  SunGrid Renewable Energy
+  GreenVolt Power
+  WindCore Energy
+  HybridGreen Power
+  RePower Infrastructure
+  Nova Renewable Systems
+  AeroSun Energy
+  TerraGrid Renewables
+
+Two scores
+  IPP evaluation is a weighted 1-5 capability score out of 100.
+  GES suitability is a separate percent for that consumer requirement.
+
+Permissions
+  The API enforces view and edit rights. Failed calls surface through
+  ErrorState or a toast.
