@@ -1,0 +1,1085 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  ADMIN
+  NEWRA_ADMIN
+  EVALUATOR
+  COMMERCIAL_REVIEWER
+  TECHNICAL_REVIEWER
+  FINANCE_REVIEWER
+  VIEWER
+  GES_ADMIN
+  GES_USER
+}
+
+enum PermissionKey {
+  IPP_VIEW
+  IPP_CREATE
+  IPP_EDIT
+  GES_VIEW
+  GES_CREATE
+  GES_EDIT
+  EVALUATION_VIEW
+  EVALUATION_EDIT
+  TECHNICAL_REVIEW
+  FINANCIAL_REVIEW
+  COMMERCIAL_REVIEW
+  TARIFF_REVIEW
+  NEGOTIATION_CREATE
+  NEGOTIATION_APPROVE
+  PSOA_VIEW
+  PSOA_CREATE
+  DEALBOOK_VIEW
+  DEALBOOK_CREATE
+  DOCUMENT_VIEW
+  DOCUMENT_UPLOAD
+  AUDIT_VIEW
+  GES_PROFILE_EDIT
+  REQUIREMENT_VIEW
+  REQUIREMENT_EDIT
+  SELECTION_VIEW
+  SELECTION_CREATE
+  COMMERCIAL_REQUIREMENT_VIEW
+  COMMERCIAL_REQUIREMENT_CREATE
+}
+
+enum GesIppSelectionStatus {
+  CONSIDERED
+  UNDER_REVIEW
+  SELECTED
+  COMMERCIAL_DISCUSSION
+  CLOSED
+}
+
+enum CommercialRequirementStatus {
+  SUBMITTED
+  UPDATED
+}
+
+enum CrmStage {
+  CLIENT_DISCOVERY
+  INTRODUCTION
+  ELECTRICITY_BILLS
+  NRG_ANALYSIS
+  LOI
+  NRG_SYMPHONY
+  NDA_TC
+  ANNEXURE_B_PPA_DRAFT
+  FINALIZATION
+  PPA_SIGNING
+  PHASE_3_GO_LIVE
+}
+
+enum EvaluationStage {
+  IPP_EVALUATION
+  IPP_SHORTLISTING
+  NEGOTIATION
+  PSOA
+  DEALBOOK
+}
+
+enum BessPreference {
+  OPTIONAL
+  HOURS_2_TO_4
+  HOURS_4
+}
+
+enum CompatibilityStatus {
+  HIGHLY_SUITABLE
+  SUITABLE
+  CONDITIONAL
+  NOT_SUITABLE
+  GATE_FAILED
+}
+
+enum DataQuality {
+  COMPLETE
+  PARTIAL
+  MISSING
+  UNVERIFIED
+}
+
+enum DocumentStatus {
+  REQUESTED
+  PENDING
+  RECEIVED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum AssumptionType {
+  FIRM
+  QUOTATION_SUPPORTED
+  INDICATIVE
+  BUDGETARY
+}
+
+enum GateStatus {
+  PASS
+  CONDITIONAL
+  FAIL
+}
+
+enum ConnectivityStatus {
+  PRELIMINARY
+  UNDER_STUDY
+  APPLICATION_SUBMITTED
+  APPROVAL_PENDING
+  APPROVED
+}
+
+enum TariffSustainability {
+  SUSTAINABLE
+  AGGRESSIVE
+  UNSUSTAINABLE
+}
+
+enum OfferType {
+  IPP_OFFER
+  COUNTER_OFFER
+  IPP_RESPONSE
+  ACCEPTED
+  REJECTED
+  REVISED
+}
+
+enum OfferStatus {
+  OPEN
+  SUPERSEDED
+  ACCEPTED
+  REJECTED
+  REVISED
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DocumentCategory {
+  IPP_COMPANY_PROFILE
+  PROJECT_DETAILS
+  COD_CERTIFICATES
+  GENERATION_REPORTS
+  P50_P75_P90
+  EHV_DOCUMENTS
+  TECHNICAL_DOCUMENTS
+  BESS_DOCUMENTS
+  CAPEX_DOCUMENTS
+  FINANCIAL_DOCUMENTS
+  TARIFF_PROPOSAL
+  PPA_DRAFT
+  REGULATORY_DOCUMENTS
+  CLIENT_REFERENCES
+  APPROVALS
+}
+
+enum RedFlagCategory {
+  TECHNICAL
+  EXECUTION
+  FINANCIAL
+  PRICING
+  REGULATORY
+}
+
+enum RedFlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PsoaItemStatus {
+  PENDING
+  RECEIVED
+  VERIFIED
+  EXCEPTION
+}
+
+model User {
+  id            String         @id
+  email         String         @unique
+  name          String
+  passwordHash  String
+  title         String
+  active        Boolean        @default(true)
+  gesId         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  ges           GES?           @relation(fields: [gesId], references: [id], onDelete: SetNull)
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  offers        NegotiationOffer[]
+  ownedDocs     Document[]     @relation("DocumentOwner")
+  tasks         Task[]         @relation("TaskOwner")
+  activities    Activity[]
+  selectionsCreated GESIPPSelection[] @relation("SelectionCreator")
+  selectionsUpdated GESIPPSelection[] @relation("SelectionUpdater")
+  commercialRequirementsCreated CommercialRequirement[] @relation("CommercialCreator")
+}
+
+model Role {
+  id          String           @id
+  name        RoleName         @unique
+  description String
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id
+  key         PermissionKey    @unique
+  description String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model SuitabilityConfig {
+  id             String   @id
+  name           String
+  active         Boolean  @default(true)
+  weights        Json
+  tariffFloor    Float
+  tariffCeiling  Float
+  illustrative   Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model GES {
+  id                     String          @id
+  name                   String
+  legalName              String
+  businessType           String
+  location               String
+  state                  String
+  discom                 String
+  consumerNumbers        String
+  contractDemandMw       Float
+  billedDemandMw         Float
+  existingRooftopMw      Float
+  existingRenewableGwh   Float
+  annualConsumptionGwh   Float
+  renewableEnergyTargetPercent Float?
+  sanctionedLoadKw       Float?
+  solarConnectionType    String?
+  peakRecordedDemandKva  Float?
+  bessRequirement        String?
+  notes                  String
+  contactName            String          @default("")
+  contactEmail           String          @default("")
+  contactPhone           String          @default("")
+  fieldProvenance        Json?
+  illustrative           Boolean         @default(true)
+  crmStage               CrmStage
+  evaluationStage        EvaluationStage
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  requirement            GESRequirement?
+  consumers              GESConsumer[]
+  loadProfiles           GESLoadProfile[]
+  documents              Document[]
+  tasks                  Task[]
+  activities             Activity[]
+  negotiations           Negotiation[]
+  psoas                  Psoa[]
+  dealbooks              Dealbook[]
+  comparisons            Comparison[]
+  loadMatches            LoadMatchResult[]
+  gateResults            CriticalGateResult[]
+  redFlags               RedFlag[]
+  users                  User[]
+  selections             GESIPPSelection[]
+  commercialRequirements CommercialRequirement[]
+}
+
+model GESConsumer {
+  id               String @id @default(cuid())
+  gesId            String
+  ges              GES    @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  consumerNumber   String
+  discom           String
+  contractDemandMw Float
+  billedDemandMw   Float
+  voltageLevel     String
+}
+
+model GESRequirement {
+  id                  String              @id
+  gesId               String              @unique
+  ges                 GES                 @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  annualEnergyGwh     Float
+  peakDemandMw        Float
+  requiredCapacityGw  Float
+  targetCodYear       Int
+  preferredTechnologies String[]
+  bessPreference      BessPreference
+  bessHoursMin        Float?
+  bessHoursMax        Float?
+  notes               String
+  renewableTargetPercent Float?
+  requiredRenewableGwh   Float?
+  targetTariffInrPerKwh  Float?
+  contractTenureYears    Float?
+  commercialNotes        String              @default("")
+  dataQuality         DataQuality
+  illustrative        Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  ipps                GESRequirementIPP[]
+  suitabilities       IPPSuitability[]
+  selections          GESIPPSelection[]
+}
+
+model GESLoadProfile {
+  id               String         @id
+  gesId            String
+  ges              GES            @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  name             String
+  intervalMinutes  Int            @default(15)
+  intervals        Json
+  annualEnergyGwh  Float
+  peakMw           Float
+  dataQuality      DataQuality
+  source           String
+  evidenceStatus   DocumentStatus
+  illustrative     Boolean        @default(true)
+}
+
+model IPP {
+  id                        String   @id
+  name                      String
+  legalName                 String
+  headquarters              String
+  technologySummary         String
+  solarMw                   Float
+  windMw                    Float
+  bessMw                    Float
+  bessMwh                   Float
+  annualGenerationGwh       Float
+  p90Gwh                    Float
+  indicativeTariffInrPerKwh Float
+  targetCodYear             Int
+  projectDistrict           String?
+  projectLocation           String?
+  generationData15Min       String?
+  fdreCapability            String?
+  gridVoltage               String?
+  gridConnectivity          String?
+  openAccessReadiness       String?
+  tariffType                String?
+  contractTenureYears       Float?
+  codConfidence             String?
+  financialModelAvailable   String?
+  fundingStatus             String?
+  evaluationStage           EvaluationStage
+  pendingFrom               String
+  illustrative              Boolean  @default(true)
+  baseline                  Json
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  project                   IPPProject?
+  experience                IPPExperience?
+  technology                IPPTechnology?
+  solarProfile              IPPSolarProfile?
+  windProfile               IPPWindProfile?
+  bessProfile               IPPBESSProfile?
+  generation                IPPGenerationProfile?
+  ehv                       IPPEHVProfile?
+  epc                       IPPEPCProfile?
+  execution                 IPPExecutionSchedule?
+  capex                     IPPCapexModel?
+  financial                 IPPFinancialModel?
+  tariff                    IPPTariffModel?
+  regulatory                IPPRegulatoryProfile?
+  evaluation                IPPEvaluation?
+  links                     GESRequirementIPP[]
+  suitabilities             IPPSuitability[]
+  loadMatches               LoadMatchResult[]
+  gateResults               CriticalGateResult[]
+  redFlags                  RedFlag[]
+  documents                 Document[]
+  tasks                     Task[]
+  activities                Activity[]
+  negotiations              Negotiation[]
+  comparisonIpps            ComparisonIPP[]
+  psoas                     Psoa[]
+  dealbooks                 Dealbook[]
+  selections                GESIPPSelection[]
+  commercialRequirements    CommercialRequirement[]
+}
+
+model IPPProject {
+  id         String @id @default(cuid())
+  ippId      String @unique
+  ipp        IPP    @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  name       String
+  state      String
+  capacityMw Float
+  codYear    Int
+  status     String
+}
+
+model IPPExperience {
+  id                 String @id @default(cuid())
+  ippId              String @unique
+  ipp                IPP    @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  commissionedMw     Float
+  yearsOperating     Int
+  projectsCompleted  Int
+  notableProjects    String
+}
+
+model IPPTechnology {
+  id      String  @id @default(cuid())
+  ippId   String  @unique
+  ipp     IPP     @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  solar   Boolean
+  wind    Boolean
+  bess    Boolean
+  hybrid  Boolean
+}
+
+model IPPSolarProfile {
+  id                    String         @id @default(cuid())
+  ippId                 String         @unique
+  ipp                   IPP            @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  acMw                  Float
+  dcMw                  Float
+  dcAcRatio             Float
+  moduleTechnology      String
+  inverterPhilosophy    String
+  cuf                   Float
+  degradation           Float
+  clipping              Float
+  auxiliaryConsumption  Float
+  availability          Float
+  evidences             Json
+  dataQuality           DataQuality
+}
+
+model IPPWindProfile {
+  id                     String         @id @default(cuid())
+  ippId                  String         @unique
+  ipp                    IPP            @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  wtgRatingMw            Float
+  hubHeightM             Float
+  rotorDiameterM         Float
+  resourceMethodology    String
+  cuf                    Float
+  wakeLoss               Float
+  availability           Float
+  evidences              Json
+  dataQuality           DataQuality
+}
+
+model IPPBESSProfile {
+  id                   String         @id @default(cuid())
+  ippId                String         @unique
+  ipp                  IPP            @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  powerMw              Float
+  energyMwh            Float
+  usableEnergyMwh      Float
+  durationHours        Float
+  chemistry            String
+  oem                  String
+  pcs                  String
+  ems                  String
+  roundTripEfficiency  Float
+  depthOfDischarge     Float
+  cycleCapability      Int
+  availability         Float
+  degradation          Float?
+  augmentation         String
+  yearSnapshots        Json
+  augmentationPayer    String
+  dispatchOwner        String
+  socMin               Float
+  socMax               Float
+  warranty             String
+  performanceGuarantee String
+  evidences            Json
+  dataQuality          DataQuality
+}
+
+model IPPGenerationProfile {
+  id                      String         @id @default(cuid())
+  ippId                   String         @unique
+  ipp                     IPP            @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  p50Gwh                  Float
+  p75Gwh                  Float
+  p90Gwh                  Float
+  resourceDatabase        String
+  siteMeasurements        String
+  independentValidation   DocumentStatus
+  monthly                 Json
+  intervals               Json
+  evidences               Json
+  dataQuality             DataQuality
+}
+
+model IPPEHVProfile {
+  id                    String              @id @default(cuid())
+  ippId                 String              @unique
+  ipp                   IPP                 @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  kv132Experience       Boolean
+  kv220Experience       Boolean
+  stuCoordination       String
+  sldcCoordination      String
+  discomCoordination    String
+  systemStudies         String
+  bay                   String
+  pooling               String
+  protection            String
+  metering              String
+  communication         String
+  rowStatus             String
+  transmissionRouting   String
+  connectivityStatus    ConnectivityStatus
+  capabilityScore       Float
+  connectivityRisk      String
+  evidenceStatus        DocumentStatus
+  evidences             Json
+  dataQuality           DataQuality
+}
+
+model IPPEPCProfile {
+  id                  String @id @default(cuid())
+  ippId               String @unique
+  ipp                 IPP    @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  contractor          String
+  commitment          String
+  procurementStrategy String
+  score               Float
+}
+
+model IPPExecutionSchedule {
+  id                      String   @id @default(cuid())
+  ippId                   String   @unique
+  ipp                     IPP      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  milestones              Json
+  criticalPath            Json
+  longestLeadItem         String
+  regulatoryDependency    String
+  procurementDependency   String
+  financingDependency     String
+  projectBufferMonths     Float
+  internalCod             DateTime
+  contractualCod          DateTime
+  downsideCod             DateTime
+  hasCpm                  Boolean
+  procurementAligned      Boolean
+  connectivityAssumed     Boolean
+  epcCommitted            Boolean
+}
+
+model IPPCapexModel {
+  id                String         @id @default(cuid())
+  ippId             String         @unique
+  ipp               IPP            @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  totalInrCr        Float
+  credibilityScore  Float
+  dataQuality       DataQuality
+  items             IPPCapexItem[]
+}
+
+model IPPCapexItem {
+  id               String          @id @default(cuid())
+  modelId          String
+  model            IPPCapexModel   @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  category         String
+  amountInrCr      Float
+  unit             String
+  source           String
+  evidence         String
+  assumptionType   AssumptionType
+  evidenceStatus   DocumentStatus
+}
+
+model IPPFinancialModel {
+  id                      String         @id @default(cuid())
+  ippId                   String         @unique
+  ipp                     IPP            @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  debtInrCr               Float
+  equityInrCr             Float
+  debtEquityRatio         Float
+  interestRate            Float
+  loanTenureYears         Int
+  moratoriumYears         Float
+  dscr                    Float
+  equityRequirementInrCr  Float
+  projectIrr              Float
+  equityIrr               Float
+  financialClosureDate    DateTime?
+  lenderExperience        String
+  lenderIdentified        Boolean
+  fundraisingDependency   Boolean
+  refinancingAssumptions  String
+  capabilityScore         Float
+  dataQuality             DataQuality
+  financingScheduleMismatch Boolean
+}
+
+model IPPTariffModel {
+  id              String               @id @default(cuid())
+  ippId           String               @unique
+  ipp             IPP                  @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  unit            String               @default("INR/kWh")
+  quotedTariff    Float
+  calculatedTariff Float
+  sustainability  TariffSustainability
+  escalationClear Boolean
+  evacuationExcluded Boolean
+  bessExcluded    Boolean
+  drivers         Json
+  components      IPPTariffComponent[]
+  scenarios       IPPTariffScenario[]
+}
+
+model IPPTariffComponent {
+  id          String         @id @default(cuid())
+  modelId     String
+  model       IPPTariffModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  key         String
+  label       String
+  amount      Float
+  capexLinked Boolean        @default(false)
+  debtLinked  Boolean        @default(false)
+  bessLinked  Boolean        @default(false)
+  fixedRecovery Boolean      @default(false)
+  sortOrder   Int
+}
+
+model IPPTariffScenario {
+  id             String         @id @default(cuid())
+  modelId        String
+  model          IPPTariffModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  name           String
+  assumptions    Json
+  baseTariff     Float
+  scenarioTariff Float
+  change         Float
+  changePct      Float
+  financial      Json
+  createdAt      DateTime       @default(now())
+}
+
+model IPPRegulatoryProfile {
+  id               String   @id @default(cuid())
+  ippId            String   @unique
+  ipp              IPP      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  items            Json
+  protectionScore  Float
+  changeInLaw      String
+  curtailment      String
+  indemnity        String
+  complianceBearer String
+  delayBearer      String
+  dataQuality      DataQuality
+}
+
+model IPPEvaluation {
+  id            String                   @id
+  ippId         String                   @unique
+  ipp           IPP                      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  overallScore  Float
+  dataQuality   DataQuality
+  confidence    Float
+  reviewerName  String
+  calculatedAt  DateTime
+  parameters    IPPEvaluationParameter[]
+  scores        IPPEvaluationScore[]
+}
+
+model IPPEvaluationParameter {
+  id                    String         @id @default(cuid())
+  evaluationId          String
+  evaluation            IPPEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  key                   String
+  name                  String
+  shortLabel            String
+  score                 Float
+  weight                Float
+  normalizedScore       Float
+  weightedContribution  Float
+  evidence              String
+  status                GateStatus
+  reviewer              String
+  dataQuality           DataQuality
+
+  @@unique([evaluationId, key])
+}
+
+model IPPEvaluationScore {
+  id           String        @id @default(cuid())
+  evaluationId String
+  evaluation   IPPEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  key          String
+  baseScore    Float
+  appliedScore Float
+  reason       String
+
+  @@unique([evaluationId, key])
+}
+
+model CriticalGate {
+  id          String               @id
+  key         String               @unique
+  name        String
+  description String
+  sortOrder   Int
+  results     CriticalGateResult[]
+}
+
+model CriticalGateResult {
+  id        String        @id @default(cuid())
+  gateId    String
+  gate      CriticalGate  @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  ippId     String
+  ipp       IPP           @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  gesId     String
+  ges       GES           @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  status    GateStatus
+  rationale String
+  evidence  String
+
+  @@unique([gateId, ippId, gesId])
+}
+
+model RedFlag {
+  id         String           @id @default(cuid())
+  ippId      String
+  ipp        IPP              @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  gesId      String?
+  ges        GES?             @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  category   RedFlagCategory
+  severity   RedFlagSeverity
+  code       String
+  title      String
+  detail     String
+  active     Boolean          @default(true)
+
+  @@index([ippId, gesId])
+}
+
+model IPPSuitability {
+  id                   String               @id @default(cuid())
+  gesRequirementId     String
+  requirement          GESRequirement       @relation(fields: [gesRequirementId], references: [id], onDelete: Cascade)
+  ippId                String
+  ipp                  IPP                  @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  overallPct           Float
+  compatibilityStatus  CompatibilityStatus
+  illustrativeSeedStatus CompatibilityStatus?
+  dimensions           Json
+  dataQuality          DataQuality
+  blockedByGate        Boolean
+  calculatedAt         DateTime
+
+  @@unique([gesRequirementId, ippId])
+}
+
+model LoadMatchResult {
+  id            String   @id @default(cuid())
+  gesId         String
+  ges           GES      @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId         String
+  ipp           IPP      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  requiredGwh   Float
+  availableGwh  Float
+  matchedGwh    Float
+  surplusGwh    Float
+  deficitGwh    Float
+  coveragePct   Float
+  loadMatchPct  Float
+  series        Json
+  dataQuality   DataQuality
+  calculatedAt  DateTime
+
+  @@unique([gesId, ippId])
+}
+
+model GESRequirementIPP {
+  id                   String               @id
+  gesRequirementId     String
+  requirement          GESRequirement       @relation(fields: [gesRequirementId], references: [id], onDelete: Cascade)
+  ippId                String
+  ipp                  IPP                  @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  compatibilityStatus  CompatibilityStatus
+  illustrativeSeedStatus CompatibilityStatus
+  suitabilityScore     Float                @default(0)
+  technicalFit         Float                @default(0)
+  commercialFit        Float                @default(0)
+  financialFit         Float                @default(0)
+  generationFit        Float                @default(0)
+  loadMatchScore       Float                @default(0)
+  shortlisted          Boolean              @default(false)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@unique([gesRequirementId, ippId])
+}
+
+model GESIPPSelection {
+  id                  String                @id @default(cuid())
+  gesId               String
+  ges                 GES                   @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId               String
+  ipp                 IPP                   @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  gesRequirementId    String
+  requirement         GESRequirement        @relation(fields: [gesRequirementId], references: [id], onDelete: Cascade)
+  status              GesIppSelectionStatus @default(CONSIDERED)
+  createdById         String?
+  createdBy           User?                 @relation("SelectionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByRole       String                @default("")
+  actingOnBehalfOfGes Boolean               @default(false)
+  updatedById         String?
+  updatedBy           User?                 @relation("SelectionUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  commercialRequirements CommercialRequirement[]
+  negotiation         Negotiation?
+
+  @@unique([gesId, ippId])
+  @@index([gesRequirementId])
+}
+
+model CommercialRequirement {
+  id                    String                      @id @default(cuid())
+  selectionId           String
+  selection             GESIPPSelection             @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  gesId                 String
+  ges                   GES                         @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId                 String
+  ipp                   IPP                         @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  targetTariffInrPerKwh Float?
+  requiredEnergyGwh     Float?
+  requiredLoadMw        Float?
+  contractTenureYears   Float?
+  targetSupplyYear      Int?
+  notes                 String                      @default("")
+  status                CommercialRequirementStatus
+  createdById           String?
+  createdBy             User?                       @relation("CommercialCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByRole         String                      @default("")
+  actingOnBehalfOfGes   Boolean                     @default(false)
+  createdAt             DateTime                    @default(now())
+
+  @@index([selectionId, createdAt])
+  @@index([gesId, ippId])
+}
+
+model Comparison {
+  id          String          @id @default(cuid())
+  gesId       String
+  ges         GES             @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  name        String
+  createdById String?
+  working     Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  ipps        ComparisonIPP[]
+
+  @@index([gesId, working])
+}
+
+model ComparisonIPP {
+  comparisonId String
+  ippId        String
+  position     Int
+  comparison   Comparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  ipp          IPP        @relation(fields: [ippId], references: [id], onDelete: Cascade)
+
+  @@id([comparisonId, ippId])
+}
+
+model Negotiation {
+  id        String             @id
+  gesId     String
+  ges       GES                @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId     String
+  ipp       IPP                @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  status    String
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  offers      NegotiationOffer[]
+  selectionId String?            @unique
+  selection   GESIPPSelection?   @relation(fields: [selectionId], references: [id], onDelete: SetNull)
+
+  @@unique([gesId, ippId])
+}
+
+model NegotiationOffer {
+  id                    String       @id @default(cuid())
+  negotiationId         String
+  negotiation           Negotiation  @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  version               Int
+  offerType             OfferType
+  tariff                Float
+  codYear               Int
+  bessSummary           String
+  paymentTerms          String
+  changeInLaw           String
+  curtailment           String
+  performanceGuarantee  String
+  riskAllocation        String
+  otherTerms            String
+  status                OfferStatus
+  createdById           String?
+  createdBy             User?        @relation(fields: [createdById], references: [id])
+  createdAt             DateTime     @default(now())
+
+  @@unique([negotiationId, version])
+}
+
+model Document {
+  id          String           @id
+  gesId       String?
+  ges         GES?             @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId       String?
+  ipp         IPP?             @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  category    DocumentCategory
+  title       String
+  status      DocumentStatus
+  ownerId     String?
+  owner       User?            @relation("DocumentOwner", fields: [ownerId], references: [id])
+  pendingFrom String
+  location    String
+  comments    String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  versions    DocumentVersion[]
+}
+
+model DocumentVersion {
+  id           String    @id @default(cuid())
+  documentId   String
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version      Int
+  sentDate     DateTime?
+  receivedDate DateTime?
+  signedDate   DateTime?
+  notes        String
+}
+
+model Task {
+  id          String       @id
+  gesId       String?
+  ges         GES?         @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId       String?
+  ipp         IPP?         @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  title       String
+  dueDate     DateTime
+  ownerId     String?
+  owner       User?        @relation("TaskOwner", fields: [ownerId], references: [id])
+  pendingFrom String
+  priority    TaskPriority
+  status      TaskStatus
+  createdAt   DateTime     @default(now())
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  gesId     String?
+  ges       GES?     @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId     String?
+  ipp       IPP?     @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  message   String
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Psoa {
+  id        String   @id
+  gesId     String
+  ges       GES      @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId     String
+  ipp       IPP      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  items     Json
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gesId, ippId])
+}
+
+model Dealbook {
+  id              String   @id
+  gesId           String
+  ges             GES      @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId           String
+  ipp             IPP      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  recommendation  String
+  conditions      String
+  summary         Json
+  approvals       Json
+  illustrative    Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([gesId, ippId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entity     String
+  entityId   String
+  action     String
+  oldValue   Json?
+  newValue   Json?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  requestId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entity, entityId])
+}

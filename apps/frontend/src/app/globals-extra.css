@@ -1,0 +1,123 @@
+.quick-links { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+.quick-links a { display: flex; align-items: center; gap: 9px; padding: 12px; border: 1px solid rgba(160,186,214,.16); border-radius: 12px; color: #c5d0de; }
+.quick-links a:hover { border-color: #2ad4c2; background: rgba(30,184,166,.08); }
+.quick-links a>span:nth-child(2) { flex: 1; }
+.quick-links strong,.quick-links small { display: block; }
+.quick-links strong { color: #f3f7fb; font-size: 9px; }
+.quick-links small { margin-top: 4px; color: #8ea0b8; font-size: 8px; }
+.quick-icon { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 6px; background: rgba(30,184,166,.14); color: #5eead4; }
+.quick-icon.orange { background: rgba(224,164,90,.16); color: #f0c98a; }
+.quick-icon.blue { background: rgba(122,162,232,.16); color: #b7ccf5; }
+.section-spacer { height: 14px; }
+.compact-card .card-body { padding-top: 12px; }
+.count-badge { margin-left: 5px; padding: 2px 5px; border-radius: 9px; background: rgba(30,184,166,.16); color: #7dffe8; font: 600 8px 'DM Sans',sans-serif; }
+.number-sub svg { vertical-align: -2px; }
+.metric-icon.amber { background: rgba(224,164,90,.16); color: #f0c98a; }
+.metric-icon.red { background: rgba(224,122,114,.16); color: #ffc2bc; }
+.metric-icon.blue { background: rgba(122,162,232,.16); color: #b7ccf5; }
+@media (max-width: 760px) { .quick-links { grid-template-columns: 1fr; } }
+.quick-links a>svg { flex-shrink: 0; color: #8ea0b8; }
+.focus-select,.selector-field { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 6px 22px 6px 8px; border: 1px solid rgba(160,186,214,.22); border-radius: 999px; color: #8ea0b8; font-size: 8px; background: #0c1422; }
+.focus-select select,.selector-field select { max-width: 145px; appearance: none; border: 0; outline: 0; background: transparent; color: #f3f7fb; font-size: 8px; font-weight: 700; cursor: pointer; }
+.focus-select svg { position: absolute; right: 6px; pointer-events: none; }
+.match-stat-row { display: flex; justify-content: space-between; gap: 6px; padding: 9px 10px; border: 1px solid rgba(160,186,214,.16); border-radius: 8px; background: #0c1422; color: #8ea0b8; font-size: 8px; }
+.match-stat-row strong { padding-left: 3px; color: #5eead4; }
+.interval-footnote { display: flex; align-items: flex-start; gap: 6px; margin-top: 7px; color: #8ea0b8; font-size: 8px; line-height: 1.5; }
+.interval-footnote svg { flex-shrink: 0; margin-top: 1px; color: #5eead4; }
+.scenario-columns { display: grid; grid-template-columns: .75fr 1.25fr; gap: 20px; }
+.tariff-readout { display: flex; align-items: center; justify-content: center; gap: 17px; margin: 0 0 3px; padding: 10px; border: 1px solid rgba(160,186,214,.16); border-radius: 8px; background: #0c1422; color: #8ea0b8; font-size: 8px; }
+.tariff-readout>span { display: grid; gap: 4px; text-align: center; }
+.tariff-readout strong { color: #f3f7fb; font: 700 14px Manrope,sans-serif; }
+.tariff-readout>span:last-child strong { color: #5eead4; }
+.tariff-readout small { display: inline; color: #6f829c; font: 400 8px 'DM Sans',sans-serif; }
+.tariff-scenario-chart { min-width: 0; }
+.tariff-card { margin-bottom: 14px; }
+.offer-card { padding: 12px 0; border-bottom: 1px solid rgba(160,186,214,.12); }
+.offer-card:last-child { border-bottom: 0; }
+.offer-heading,.offer-heading>div { display: flex; align-items: center; gap: 8px; }
+.offer-heading { justify-content: space-between; }
+.offer-heading strong { color: #e7eef6; font-size: 9px; }
+.version-tag { padding: 3px 5px; border-radius: 4px; background: rgba(30,184,166,.16); color: #7dffe8; font-size: 8px; font-weight: 700; }
+.offer-price { margin-top: 10px; color: #5eead4; font: 700 19px Manrope,sans-serif; }
+.offer-price small,.offer-price span { color: #8ea0b8; font: 400 8px 'DM Sans',sans-serif; }
+.offer-price span { margin-left: 14px; }
+.offer-meta { display: flex; justify-content: space-between; margin-top: 7px; color: #8ea0b8; font-size: 8px; }
+.offer-meta span:first-child { display: flex; align-items: center; gap: 4px; }
+.offer-terms { margin-top: 8px; padding: 8px; border-radius: 5px; background: #0c1422; color: #c5d0de; font-size: 8px; line-height: 1.5; }
+.selector-field { gap: 8px; font-size: 9px; }
+.selector-field select { font-size: 9px; }
+.psoa-metrics { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.evidence-list { padding-top: 3px; }
+.evidence-row { display: grid; grid-template-columns: 24px 1fr auto 120px; align-items: center; gap: 11px; padding: 10px 0; border-bottom: 1px solid rgba(160,186,214,.12); }
+.evidence-row:last-child { border-bottom: 0; }
+.evidence-copy strong,.evidence-copy small { display: block; }
+.evidence-copy strong { color: #e7eef6; font-size: 9px; }
+.evidence-copy small { margin-top: 4px; color: #8ea0b8; font-size: 8px; }
+.evidence-row select { height: 28px; padding: 0 6px; border: 1px solid rgba(160,186,214,.22); border-radius: 5px; background: #0c1422; color: #e7eef6; font-size: 8px; }
+.flow-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.flow-steps span { padding: 4px 8px; border: 1px solid rgba(94,234,212,.35); border-radius: 999px; color: #7dffe8; font-size: 8px; font-weight: 700; }
+.dealbook-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
+.dealbook-card { padding: 16px; }
+.dealbook-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.dealbook-head h2 { margin: 7px 0 4px; color: #f3f7fb; font: 700 13px Manrope,sans-serif; }
+.dealbook-head h2 a { color: inherit; }
+.dealbook-head h2 a:hover { color: #7dffe8; }
+.dealbook-head p { margin: 0; color: #8ea0b8; font-size: 8px; }
+.dealbook-score { display: grid; gap: 3px; justify-items: end; }
+.dealbook-score strong { color: #5eead4; font: 700 22px Manrope,sans-serif; }
+.dealbook-score span { color: #8ea0b8; font-size: 8px; }
+.dealbook-metrics { display: grid; grid-template-columns: repeat(2,1fr); gap: 11px; margin-top: 15px; padding: 11px; border-radius: 8px; background: #0c1422; }
+.dealbook-metrics span { display: grid; gap: 4px; }
+.dealbook-metrics small { color: #8ea0b8; font-size: 7px; }
+.dealbook-metrics strong { color: #f3f7fb; font: 700 11px Manrope,sans-serif; }
+.dealbook-metrics i { color: #6f829c; font: 400 7px 'DM Sans',sans-serif; }
+.requirement-card { margin-bottom: 14; }
+.requirement-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.requirement-tile { display: grid; gap: 4px; min-height: 64px; padding: 10px 12px; border: 1px solid rgba(160,186,214,.16); border-radius: 10px; background: #0c1422; color: inherit; text-align: left; cursor: pointer; }
+.requirement-tile small { color: #8ea0b8; font-size: 8px; letter-spacing: .2px; }
+.requirement-tile strong { color: #f3f7fb; font: 700 13px Manrope, sans-serif; overflow-wrap: anywhere; }
+.requirement-tile:hover, .requirement-tile:focus-visible { border-color: rgba(94,234,212,.45); }
+.requirement-tile[aria-pressed="true"] { border-color: rgba(94,234,212,.7); background: rgba(42,212,194,.1); }
+.requirement-detail { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 10px; padding: 12px; border: 1px solid rgba(94,234,212,.22); border-radius: 10px; background: #101826; }
+.requirement-detail h3 { display: flex; align-items: center; margin: 4px 0; color: #f3f7fb; font: 700 13px Manrope, sans-serif; }
+.requirement-detail strong { color: #7dffe8; font: 700 18px Manrope, sans-serif; }
+.requirement-detail p { max-width: 680px; margin: 6px 0 0; color: #c5d0de; font-size: 11px; line-height: 1.5; }
+.ges-profile-metrics { margin-top: 0; }
+.ges-profile-metrics span { min-width: 0; }
+.ges-profile-metrics small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ges-profile-metrics strong { overflow-wrap: anywhere; }
+.dealbook-section-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 13px 0 7px; color: #8ea0b8; font-size: 8px; }
+.ipp-link-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; color: #8ea0b8; font-size: 9px; }
+.ipp-capacity { display: grid; gap: 2px; white-space: normal; line-height: 1.4; }
+.ipp-section-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.ipp-link-row .filter-select { max-width: 280px; }
+.dealbook-section-title strong { color: #e7eef6; font-size: 9px; }
+.dealbook-section-title span { display: inline-flex; align-items: center; gap: 4px; color: #8ea0b8; }
+.gate-mini,.evidence-mini { display: grid; gap: 6px; }
+.gate-mini>div,.evidence-mini>div { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #c5d0de; font-size: 8px; }
+.dealbook-risk { display: grid; gap: 4px; margin-top: 12px; padding: 9px; border-radius: 5px; background: rgba(224,164,90,.1); }
+.dealbook-risk strong { color: #f0c98a; font-size: 8px; }
+.dealbook-risk small { color: #c9b49a; font-size: 8px; }
+@media (max-width: 900px) { .scenario-columns { grid-template-columns: 1fr; } .dealbook-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .provider-row { grid-template-columns: minmax(120px,1.3fr) 1fr auto; }
+  .provider-row.header span:nth-child(4),.provider-row>span:nth-child(4),.provider-row>.status-pill { display: none; }
+  .match-stat-row { flex-wrap: wrap; }
+  .evidence-row { grid-template-columns: 24px 1fr auto; }
+  .evidence-row select { grid-column: 2 / 4; width: 100%; }
+  .evidence-row>.status-pill { display: none; }
+  .psoa-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .requirement-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .requirement-detail { align-items: stretch; }
+}
+@media (max-width: 450px) {
+  .ges-profile-metrics, .requirement-board { grid-template-columns: 1fr; }
+  .requirement-detail { flex-direction: column; align-items: stretch; }
+  .comparison-toolbar { gap: 10px; }
+  .summary-item strong { font-size: 12px; }
+  .summary-item span { font-size: 7px; }
+  .provider-row { grid-template-columns: 1.3fr 1fr auto; }
+  .provider-row .tag-list { max-width: 78px; }
+  .requirement-editor input { width: 88px; }
+  .search-field input { width: 125px; }
+}

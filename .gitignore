@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+.vercel
+.turbo
+coverage
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+apps/backend/prisma/dev.db
+apps/backend/prisma/*.db
+*.tsbuildinfo
