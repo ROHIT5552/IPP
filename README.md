@@ -12,8 +12,8 @@ separate while sharing root-level development commands:
 
 ```text
 apps/
-  api/       NestJS API, Prisma schema/seed, domain calculations and API tests
-  web/       Next.js frontend, pages, feature components and web tests
+  backend/   NestJS API, Prisma schema/seed, domain calculations and API tests
+  frontend/  Next.js frontend, pages, feature components and web tests
 docs/        Supporting product and page/component documentation
 docker-compose.yml
 package.json
@@ -53,26 +53,26 @@ Run the following commands from the repository root in PowerShell.
 1. Install the separate frontend and backend dependencies:
 
    ```powershell
-   npm install --prefix apps/api
-   npm install --prefix apps/web
+   npm install --prefix apps/backend
+   npm install --prefix apps/frontend
    ```
 
 2. Configure the backend environment and start PostgreSQL:
 
    ```powershell
-   Copy-Item apps/api/.env.example apps/api/.env
+   Copy-Item apps/backend/.env.example apps/backend/.env
    docker compose up -d postgres
    ```
 
    The example configuration targets the local Compose database on port `5435`.
-   Replace the example JWT secrets in `apps/api/.env` with long, random values.
+   Replace the example JWT secrets in `apps/backend/.env` with long, random values.
    Never use the example secrets or demo accounts outside local development.
 
 3. Generate the Prisma client, create/update the database schema and seed demo
    data:
 
    ```powershell
-   npm run prisma:generate --prefix apps/api
+   npm run prisma:generate --prefix apps/backend
    npm run db:migrate
    npm run db:seed
    ```
@@ -92,7 +92,7 @@ Run the following commands from the repository root in PowerShell.
    `http://localhost:4010/api/health`.
 
 The frontend defaults to the local API URL. To use another API address, set
-`NEXT_PUBLIC_API_URL` in `apps/web/.env.local` (include the `/api` path).
+`NEXT_PUBLIC_API_URL` in `apps/frontend/.env.local` (include the `/api` path).
 
 ## Demo accounts
 

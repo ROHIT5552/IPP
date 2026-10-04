@@ -14,7 +14,7 @@ The web app is a Next.js App Router workspace. Authenticated pages share
 one shell. Login is a standalone screen. Two routes only redirect.
 
 Shared components
-  RootLayout          apps/web/src/app/layout.tsx
+  RootLayout          apps/frontend/src/app/layout.tsx
                       Title: "NewRa | Energy Decision Platform".
                       Wraps every route in Providers.
 
@@ -88,7 +88,7 @@ The implemented register is /ges/{gesId}/documents.
 --------
 
 Route       /login
-File        apps/web/src/app/login/page.tsx
+File        apps/frontend/src/app/login/page.tsx
 Component   LoginPage
 Shell       None. Full-page two-column layout.
 API         POST /api/auth/login through AuthProvider.signIn
@@ -123,12 +123,12 @@ Other seeded roles use the same password:
 ---------------------------------
 
 Route       /
-File        apps/web/src/app/page.tsx
+File        apps/frontend/src/app/page.tsx
 Component   Home
 Behaviour   Server redirect to /dashboard. No visual components.
 
 Route       /evaluation
-File        apps/web/src/app/evaluation/page.tsx
+File        apps/frontend/src/app/evaluation/page.tsx
 Component   EvaluationPage
 Behaviour   Server redirect to /ges/ges_aster/comparison.
             The sidebar item "Evaluations" lands on the Aster comparator.
@@ -138,7 +138,7 @@ Behaviour   Server redirect to /ges/ges_aster/comparison.
 ------------
 
 Route       /dashboard
-File        apps/web/src/app/dashboard/page.tsx
+File        apps/frontend/src/app/dashboard/page.tsx
 Component   DashboardPage
 API         GET /api/dashboard?gesId={selected GES}
 States      LoadingState. ErrorState with retry.
@@ -185,7 +185,7 @@ Alert: a strong weighted score does not clear a failed critical gate.
 ---------------
 
 Route       /ges
-File        apps/web/src/app/ges/page.tsx
+File        apps/frontend/src/app/ges/page.tsx
 Component   GesListPage
 API         GET /api/ges
 States      LoadingState. ErrorState "Unable to load accounts."
@@ -207,7 +207,7 @@ Seeded rows
 -----------------
 
 Route       /ges/[gesId]/comparison
-File        apps/web/src/app/ges/[gesId]/comparison/page.tsx
+File        apps/frontend/src/app/ges/[gesId]/comparison/page.tsx
 Component   ComparisonPage
 Reads       GET /api/ges/{gesId}/comparison?ippIds=...
 Writes      PATCH requirements, PATCH provider inputs, POST tariff scenario
@@ -303,7 +303,7 @@ Tariff sensitivity
 --------------
 
 Route       /ges/[gesId]/negotiation
-File        apps/web/src/app/ges/[gesId]/negotiation/page.tsx
+File        apps/frontend/src/app/ges/[gesId]/negotiation/page.tsx
 Component   NegotiationPage
 API         GET /api/ges/{gesId}/ipps
             GET /api/ges/{gesId}/negotiations
@@ -336,7 +336,7 @@ provider response, then accepted, rejected, or revised.
 ----------------
 
 Route       /ges/[gesId]/psoa
-File        apps/web/src/app/ges/[gesId]/psoa/page.tsx
+File        apps/frontend/src/app/ges/[gesId]/psoa/page.tsx
 Component   PsoaPage
 API         GET candidates
             GET /api/ges/{gesId}/psoa?ippId=
@@ -365,7 +365,7 @@ the remaining items through NewRa integration.
 ------------
 
 Route       /ges/[gesId]/dealbook
-File        apps/web/src/app/ges/[gesId]/dealbook/page.tsx
+File        apps/frontend/src/app/ges/[gesId]/dealbook/page.tsx
 Component   DealbookPage
 API         GET /api/ges/{gesId}/dealbook
 States      Loading "Compiling decision record".
@@ -395,7 +395,7 @@ summary. The full payload stays on the dealbook response.
 ---------------------
 
 Route       /ges/[gesId]/documents
-File        apps/web/src/app/ges/[gesId]/documents/page.tsx
+File        apps/frontend/src/app/ges/[gesId]/documents/page.tsx
 Component   DocumentsPage
 API         GET /api/ges/{gesId}/documents
             PATCH /api/documents/{id}
@@ -421,7 +421,7 @@ The comparison query is invalidated so evidence context can refresh.
 ------------------------------
 
 Chart theme
-  apps/web/src/constants/demo.ts exports CHART_COLORS.
+  apps/frontend/src/constants/demo.ts exports CHART_COLORS.
   Comparison polygons use that list in selection order.
   Unselected IPPs are omitted from the radar.
 

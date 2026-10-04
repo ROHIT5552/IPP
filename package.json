@@ -5,14 +5,14 @@
   "description": "NEWRA GES IPP Comparator — energy decision platform",
   "scripts": {
     "db:up": "docker compose up -d postgres",
-    "db:migrate": "npm run prisma:migrate --prefix apps/api",
-    "db:seed": "npm run prisma:seed --prefix apps/api",
-    "dev:api": "npm run start:dev --prefix apps/api",
-    "dev:web": "npm run dev --prefix apps/web",
-    "build:api": "npm run build --prefix apps/api",
-    "build:web": "npm run build --prefix apps/web",
-    "test": "npm test --prefix apps/api && npm test --prefix apps/web",
-    "test:api": "npm test --prefix apps/api",
-    "test:web": "npm test --prefix apps/web"
+    "db:migrate": "npm run prisma:migrate --prefix apps/backend",
+    "db:seed": "npm run prisma:seed --prefix apps/backend",
+    "dev:api": "npm run start:dev --prefix apps/backend",
+    "dev:web": "npm run dev --prefix apps/frontend",
+    "build:api": "npm run build --prefix apps/backend",
+    "build:web": "npm run build --prefix apps/frontend",
+    "test": "npm test --prefix apps/backend && npm test --prefix apps/frontend",
+    "test:api": "npm test --prefix apps/backend",
+    "test:web": "npm test --prefix apps/frontend"
   }
 }

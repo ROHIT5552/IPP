@@ -7,7 +7,7 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { GlobalExceptionFilter, LoggingInterceptor, ResponseInterceptor, requestId } from "./common/http";
 
-config({ path: "apps/api/.env" });
+config({ path: "apps/backend/.env" });
 config();
 
 async function bootstrap() {

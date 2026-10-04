@@ -9,6 +9,6 @@ coverage
 !.env.example
 *.log
 .DS_Store
-apps/api/prisma/dev.db
-apps/api/prisma/*.db
+apps/backend/prisma/dev.db
+apps/backend/prisma/*.db
 *.tsbuildinfo
