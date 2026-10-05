@@ -5,10 +5,10 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { AppShell, PageHeader } from '../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../components/DataState';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { bessLabel, technologyLabel } from '../../../features/ges/options';
-import { api } from '../../../services/api';
+import { api, listQuery } from '../../../services/api';
 import { GesAccount } from '../../../types/api';
 
 function amount(value: number | null | undefined, digits = 3) {
@@ -33,10 +33,10 @@ export default function GesDetailsPage() {
   const { gesId } = useParams<{ gesId: string }>();
   const { user } = useAuth();
   const canEdit = user?.permissions.includes('GES_EDIT') ?? false;
-  const query = useQuery({ queryKey: ['ges'], queryFn: () => api.get<GesAccount[]>('/ges') });
+  const query = useQuery({ queryKey: ['ges'], queryFn: () => api.get<GesAccount[]>('/ges'), ...listQuery });
   const ges = query.data?.find((item) => item.id === gesId);
 
-  if (query.isLoading) return <AppShell><LoadingState /></AppShell>;
+  if (query.isLoading) return <AppShell><PageSkeleton variant="detail" /></AppShell>;
   if (!ges) return <AppShell><ErrorState message="This GES account was not found." /></AppShell>;
 
   const consumption = ges.annualConsumptionGwh && ges.annualConsumptionGwh > 0 ? ges.annualConsumptionGwh : null;

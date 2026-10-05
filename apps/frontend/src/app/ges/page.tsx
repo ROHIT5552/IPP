@@ -1,32 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Eye, ListChecks, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../components/AppShell';
-import { ErrorState, LoadingState } from '../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../components/DataState';
 import { StatusPill } from '../../components/StatusPill';
+import { TablePagination } from '../../components/TablePagination';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { GesAccountForm } from '../../features/ges/GesForm';
 import { bessLabel, technologyLabel } from '../../features/ges/options';
 import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
-import { api } from '../../services/api';
+import { api, listQuery } from '../../services/api';
 import { GesAccount } from '../../types/api';
 
 function amount(value: number, digits = 3) {
   return value.toLocaleString('en-IN', { maximumFractionDigits: digits });
 }
 
-function Metric({ label, value, badge, kind }: { label: string; value: string; badge: string; kind?: 'customer' | 'calculated' }) {
-  return (
-    <span>
-      <small>{label} <span className={`field-badge ${kind ?? ''}`}>{badge}</span></small>
-      <strong>{value}</strong>
-    </span>
-  );
-}
+type SortKey = 'name' | 'consumption' | 'target';
 
 export default function GesListPage() {
   const { user } = useAuth();
@@ -34,8 +28,15 @@ export default function GesListPage() {
   const client = useQueryClient();
   const canCreate = user?.permissions.includes('GES_CREATE') ?? false;
   const canEdit = user?.permissions.includes('GES_EDIT') ?? false;
+  const [search, setSearch] = useState('');
+  const [stateFilter, setStateFilter] = useState('ALL');
+  const [stageFilter, setStageFilter] = useState('ALL');
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortAsc, setSortAsc] = useState(true);
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const query = useQuery({ queryKey: ['ges'], queryFn: () => api.get<GesAccount[]>('/ges'), refetchInterval: 15000 });
+  const query = useQuery({ queryKey: ['ges'], queryFn: () => api.get<GesAccount[]>('/ges'), ...listQuery });
   const remove = useMutation({
     mutationFn: (id: string) => api.delete<GesAccount[]>(`/ges/${id}`),
     onSuccess: async (accounts, id) => {
@@ -60,113 +61,127 @@ export default function GesListPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [pendingDelete, remove.isPending]);
 
-  if (query.isLoading) return <AppShell><LoadingState /></AppShell>;
+  const rows = query.data ?? [];
+  const states = useMemo(() => ['ALL', ...new Set(rows.map((ges) => ges.state).filter((value): value is string => Boolean(value)))].sort((left, right) => left === 'ALL' ? -1 : right === 'ALL' ? 1 : left.localeCompare(right)), [rows]);
+  const stages = useMemo(() => ['ALL', ...new Set(rows.map((ges) => ges.stage).filter(Boolean))].sort((left, right) => left === 'ALL' ? -1 : right === 'ALL' ? 1 : left.localeCompare(right)), [rows]);
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return rows.filter((ges) => {
+      const searchable = `${ges.code} ${ges.name} ${ges.legalName ?? ''} ${ges.city ?? ''} ${ges.state ?? ''} ${ges.discom ?? ''} ${ges.consumerNumbers ?? ''}`.toLowerCase();
+      return (!needle || searchable.includes(needle))
+        && (stateFilter === 'ALL' || ges.state === stateFilter)
+        && (stageFilter === 'ALL' || ges.stage === stageFilter);
+    }).sort((left, right) => {
+      const a = sortKey === 'consumption'
+        ? left.annualConsumptionGwh ?? -1
+        : sortKey === 'target' ? left.renewableEnergyTargetPercent ?? -1 : left.name.toLowerCase();
+      const b = sortKey === 'consumption'
+        ? right.annualConsumptionGwh ?? -1
+        : sortKey === 'target' ? right.renewableEnergyTargetPercent ?? -1 : right.name.toLowerCase();
+      const result = typeof a === 'string' && typeof b === 'string' ? a.localeCompare(b) : Number(a) - Number(b);
+      return sortAsc ? result : -result;
+    });
+  }, [rows, search, stateFilter, stageFilter, sortKey, sortAsc]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pendingAccount = rows.find((ges) => ges.id === pendingDelete);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, stateFilter, stageFilter, pageSize]);
+
+  function sortBy(key: SortKey) {
+    if (sortKey === key) setSortAsc((current) => !current);
+    else {
+      setSortKey(key);
+      setSortAsc(key === 'name');
+    }
+  }
+
+  if (query.isLoading) return <AppShell><PageSkeleton variant="table" /></AppShell>;
   if (query.error) return <AppShell><ErrorState message="Unable to load accounts." retry={() => void query.refetch()} /></AppShell>;
   if (!query.data?.length && canCreate) return <AppShell><GesAccountForm /></AppShell>;
 
   return (
     <AppShell>
-      <PageHeader eyebrow="GES" title="GES" description="Each account shows who the customer is, the electricity they use today, and the renewable requirement they have specified. IPP matching is listed separately.">
+      <PageHeader eyebrow="GES" title="GES accounts" description="Search and review customer electricity profiles and renewable requirements. Open an account for detailed matching and procurement workflows.">
         {canCreate && <Link className="primary-button" href="/ges/new"><Plus size={14} /> Add GES</Link>}
       </PageHeader>
-      <div className="dealbook-grid">
-        {query.data?.map((ges) => {
+      <section className="card ges-register">
+        <div className="table-toolbar">
+          <div><h2 className="card-title">Accounts <span className="count-badge">{filtered.length}</span></h2></div>
+          <div className="table-actions">
+            <label className="search-field wide"><Search size={13} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, code, location" aria-label="Search GES accounts" /></label>
+            <select className="filter-select" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} aria-label="Filter by state">
+              {states.map((item) => <option key={item} value={item}>{item === 'ALL' ? 'All states' : item}</option>)}
+            </select>
+            <select className="filter-select" value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filter by stage">
+              {stages.map((item) => <option key={item} value={item}>{item === 'ALL' ? 'All stages' : item}</option>)}
+            </select>
+          </div>
+        </div>
+        {pendingAccount && (
+          <div className="modal-backdrop" onMouseDown={() => { if (!remove.isPending) setPendingDelete(null); }}>
+            <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-ges-title" onMouseDown={(event) => event.stopPropagation()}>
+              <h3 id="delete-ges-title">Delete {pendingAccount.name}?</h3>
+              <p>This removes the account, its evaluations, and its linked IPP matches. This cannot be undone.</p>
+              <div className="card-tools" style={{ justifyContent: 'flex-end' }}>
+                <button className="small-button" type="button" onClick={() => setPendingDelete(null)} disabled={remove.isPending}>Cancel</button>
+                <button className="danger-button" type="button" disabled={remove.isPending} onClick={() => remove.mutate(pendingAccount.id)}>{remove.isPending ? 'Deleting…' : 'Confirm delete'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th><button type="button" onClick={() => sortBy('name')}>GES / code {sortKey === 'name' ? (sortAsc ? '↑' : '↓') : ''}</button></th>
+                <th>Location</th>
+                <th>Stage</th>
+                <th><button type="button" onClick={() => sortBy('consumption')}>Annual consumption {sortKey === 'consumption' ? (sortAsc ? '↑' : '↓') : ''}</button></th>
+                <th><button type="button" onClick={() => sortBy('target')}>Renewable target {sortKey === 'target' ? (sortAsc ? '↑' : '↓') : ''}</button></th>
+                <th>Technology / storage</th>
+                <th>Load matches</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((ges) => {
           const place = [ges.city, ges.state].filter(Boolean).join(', ') || ges.location;
           const consumption = ges.annualConsumptionGwh && ges.annualConsumptionGwh > 0 ? ges.annualConsumptionGwh : null;
-          const monthly = consumption === null ? null : (consumption * 1000) / 12;
-          const peakKva = ges.peakRecordedDemandKva && ges.peakRecordedDemandKva > 0
-            ? ges.peakRecordedDemandKva
-            : ges.requirement.peakDemandMw > 0 ? ges.requirement.peakDemandMw * 1000 : null;
-          const contractKva = ges.contractDemandMw && ges.contractDemandMw > 0 ? ges.contractDemandMw * 1000 : null;
-          const rooftopKw = ges.existingRooftopMw && ges.existingRooftopMw > 0 ? ges.existingRooftopMw * 1000 : null;
           const target = ges.renewableEnergyTargetPercent;
-          const hasTarget = target !== null && target !== undefined;
-          const required = hasTarget && consumption !== null ? consumption * (target / 100) : null;
           const technology = technologyLabel(ges.requirement.preferredTechnologies);
           const bess = bessLabel(ges.bessRequirement, ges.requirement.bessPreference);
-          return (
-          <section className="card dealbook-card" key={ges.id}>
-            <div className="dealbook-head">
-              <div>
-                <span className="tiny-label">{ges.code}</span>
-                <h2><Link href={`/ges/${ges.id}`}>{ges.name}</Link></h2>
-                <p><MapPin size={10} /> {place || 'Not specified'}</p>
-                <p>{ges.discom?.trim() || 'DISCOM not specified'}</p>
-                <p>Consumer no: {ges.consumerNumbers?.trim() || 'Not specified'}</p>
-              </div>
-              <div className="card-tools">
-                <StatusPill status={ges.stage} />
-                {canEdit && <Link className="small-button" href={`/ges/${ges.id}/edit`}><Pencil size={11} /> Edit</Link>}
-                {canEdit && <button className="danger-button" type="button" onClick={() => setPendingDelete(ges.id)}><Trash2 size={11} /> Delete</button>}
-              </div>
-            </div>
-            {pendingDelete === ges.id && (
-              <div className="modal-backdrop" onMouseDown={() => { if (!remove.isPending) setPendingDelete(null); }}>
-                <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-ges-title" onMouseDown={(event) => event.stopPropagation()}>
-                  <h3 id="delete-ges-title">Delete {ges.name}?</h3>
-                  <p>This removes the account, its evaluations, and its linked IPP matches. This cannot be undone.</p>
-                  <div className="card-tools" style={{ justifyContent: 'flex-end' }}>
-                    <button className="small-button" type="button" onClick={() => setPendingDelete(null)} disabled={remove.isPending}>Cancel</button>
-                    <button className="danger-button" type="button" disabled={remove.isPending} onClick={() => remove.mutate(ges.id)}>{remove.isPending ? 'Deleting…' : 'Confirm delete'}</button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="dealbook-section-title"><strong>Electricity profile</strong></div>
-            <div className="dealbook-metrics ges-profile-metrics">
-              <Metric label="Annual consumption" value={consumption === null ? '—' : `${amount(consumption, 4)} GWh/year`} badge="Electricity profile" />
-              <Metric label="Average monthly" value={monthly === null ? '—' : `${amount(monthly, 3)} MWh/month`} badge="Auto calculated" kind="calculated" />
-              <Metric label="Peak recorded demand" value={peakKva === null ? '—' : `${amount(peakKva, 1)} kVA`} badge="Electricity profile" />
-              <Metric label="Contract demand" value={contractKva === null ? '—' : `${amount(contractKva, 1)} kVA`} badge="Electricity profile" />
-              <Metric label="Sanctioned load" value={ges.sanctionedLoadKw ? `${amount(ges.sanctionedLoadKw, 1)} kW` : '—'} badge="Electricity profile" />
-              <Metric label="Existing rooftop solar" value={rooftopKw === null ? '—' : `${amount(rooftopKw, 1)} kW`} badge="Electricity profile" />
-            </div>
-            <div className="dealbook-section-title"><strong>Renewable requirement</strong></div>
-            <div className="dealbook-metrics ges-profile-metrics">
-              <Metric label="Renewable energy target" value={hasTarget ? `${amount(target, 1)}%` : 'Not specified'} badge="Customer input" kind="customer" />
-              <Metric label="Required renewable energy" value={required === null ? 'Not specified' : `${amount(required, 4)} GWh/year`} badge="Auto calculated" kind="calculated" />
-              <Metric label="Target supply start" value={ges.requirement.targetCodYear > 0 ? String(ges.requirement.targetCodYear) : 'Not specified'} badge="Customer input" kind="customer" />
-            </div>
-            <div className="dealbook-section-title"><strong>Procurement preference</strong></div>
-            <div className="tag-list">
-              <span className="tech-tag">{technology === 'Not specified' ? 'Technology: Not specified' : technology}</span>
-              <span className="tech-tag">BESS: {bess}</span>
-            </div>
-            <div className="dealbook-section-title">
-              <strong>Load match snapshot</strong>
-              <span>{ges.ipps?.length ? `${ges.ipps.length} calculated` : 'No calculation yet'}</span>
-            </div>
-            <p className="card-subtitle">Calculated against the global IPP catalogue. This is not IPP ownership. Selections are recorded only when a GES considers an IPP.</p>
-            {ges.ipps?.length ? (
-              <>
-                <p className="card-subtitle" style={{ margin: '0 0 8px' }}>Calculated generation match</p>
-                <div className="data-table-wrap">
-                  <table className="data-table">
-                    <thead><tr><th>IPP</th><th>Available</th><th>Used</th><th>Of IPP</th><th>Of GES</th></tr></thead>
-                    <tbody>
-                      {ges.ipps.map((ipp) => (
-                        <tr key={ipp.id}>
-                          <td><strong>{ipp.name}</strong><span className="number-sub">{ipp.technology}</span></td>
-                          <td>{amount(ipp.availableGwh, 1)} GWh</td>
-                          <td><strong>{amount(ipp.matchedGwh, 1)} GWh</strong></td>
-                          <td>{ipp.usedPct}%</td>
-                          <td>{ipp.coveragePct}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : <div className="empty-state"><span>No IPP matching completed yet</span></div>}
-            <div className="card-tools" style={{ marginTop: 12 }}>
-              <Link className="small-button" href={`/ges/${ges.id}/requirements`}>GES requirement</Link>
-              <Link className="small-button" href={`/ges/${ges.id}/selections`}>Selected IPPs</Link>
-              <Link className="list-link" href={`/ges/${ges.id}/comparison`}>Open comparator <ArrowRight size={12} /></Link>
-            </div>
-          </section>
-          );
-        })}
-      </div>
+                return (
+                  <tr key={ges.id}>
+                    <td><strong><Link href={`/ges/${ges.id}`}>{ges.name}</Link></strong><span className="number-sub">{ges.code} · {ges.discom?.trim() || 'DISCOM not specified'}</span></td>
+                    <td>{place || 'Not specified'}{ges.consumerNumbers?.trim() ? <span className="number-sub">Consumer no: {ges.consumerNumbers}</span> : null}</td>
+                    <td><StatusPill status={ges.stage} /></td>
+                    <td>{consumption === null ? '—' : `${amount(consumption, 4)} GWh/year`}</td>
+                    <td>{target == null ? '—' : `${amount(target, 1)}%`}</td>
+                    <td><span className="tech-tag">{technology}</span><span className="number-sub">BESS: {bess}</span></td>
+                    <td>{ges.ipps?.length ? `${ges.ipps.length} calculated` : 'Not calculated'}</td>
+                    <td>
+                      <div className="row-actions">
+                        <Link className="small-button icon-only" href={`/ges/${ges.id}`} aria-label={`View ${ges.name}`}><Eye size={12} /></Link>
+                        <Link className="small-button icon-only" href={`/ges/${ges.id}/requirements`} aria-label={`Requirements for ${ges.name}`}><ClipboardList size={12} /></Link>
+                        <Link className="small-button icon-only" href={`/ges/${ges.id}/selections`} aria-label={`Selected IPPs for ${ges.name}`}><ListChecks size={12} /></Link>
+                        <Link className="small-button icon-only" href={`/ges/${ges.id}/comparison`} aria-label={`Compare IPPs for ${ges.name}`}><ArrowLeftRight size={12} /></Link>
+                        {canEdit && <Link className="small-button icon-only" href={`/ges/${ges.id}/edit`} aria-label={`Edit ${ges.name}`}><Pencil size={12} /></Link>}
+                        {canEdit && <button className="danger-button icon-only" type="button" aria-label={`Delete ${ges.name}`} onClick={() => setPendingDelete(ges.id)}><Trash2 size={12} /></button>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!visible.length && <div className="empty-state"><span>No GES accounts match these filters.</span></div>}
+        </div>
+        <TablePagination recordCount={filtered.length} currentPage={currentPage} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} recordLabel="accounts" />
+      </section>
     </AppShell>
   );
 }

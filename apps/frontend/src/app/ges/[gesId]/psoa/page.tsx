@@ -5,17 +5,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, CircleDashed, FileCheck2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../../components/DataState';
 import { StatusPill } from '../../../../components/StatusPill';
 import { api } from '../../../../services/api';
 import { PsoaRecord, ProviderOption } from '../../../../types/api';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function PsoaPage() {
   const { gesId } = useParams<{ gesId: string }>();
-  const [providerId, setProviderId] = useState('ipp_sungrid');
+  const [providerId, setProviderId] = useState('');
   const queryClient = useQueryClient();
   const candidates = useQuery({ queryKey: ['candidates', gesId], queryFn: () => api.get<ProviderOption[]>(`/ges/${gesId}/ipps`) });
+  useEffect(() => {
+    if (!providerId && candidates.data?.[0]) setProviderId(candidates.data[0].id);
+  }, [candidates.data, providerId]);
   const checklist = useQuery({
     queryKey: ['psoa', gesId, providerId],
     queryFn: async () => (await api.get<PsoaRecord[]>(`/ges/${gesId}/psoa?ippId=${providerId}`))[0],
@@ -30,8 +33,10 @@ export default function PsoaPage() {
     onError: (error) => toast.error(error.message),
   });
 
-  if (candidates.isLoading || checklist.isLoading) return <AppShell><LoadingState label="Loading evidence checklist" /></AppShell>;
-  if (candidates.error || checklist.error || !checklist.data) return <AppShell><ErrorState message="Evidence checklist is unavailable." retry={() => void checklist.refetch()} /></AppShell>;
+  if (candidates.isLoading || (candidates.data?.length && (!providerId || checklist.isLoading))) return <AppShell><PageSkeleton variant="detail" /></AppShell>;
+  if (candidates.error) return <AppShell><ErrorState message="Evidence checklist is unavailable." retry={() => void candidates.refetch()} /></AppShell>;
+  if (!candidates.data?.length) return <AppShell><PageHeader eyebrow="EVIDENCE READINESS" title="PSOA checklist" description="Track readiness item by item, independently of the overall evaluation stage." /><div className="empty-state"><span>No IPP candidates are currently associated with this GES.</span></div></AppShell>;
+  if (checklist.error || !checklist.data) return <AppShell><ErrorState message="Evidence checklist is unavailable." retry={() => void checklist.refetch()} /></AppShell>;
   const verified = checklist.data.items.filter((item) => item.status === 'VERIFIED').length;
   return (
     <AppShell>

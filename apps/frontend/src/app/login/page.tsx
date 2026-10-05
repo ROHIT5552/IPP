@@ -1,81 +1,141 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { ArrowRight, Eye, EyeOff, ShieldCheck, Zap } from 'lucide-react';
-import { useAuth } from '../../features/auth/AuthProvider';
+import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Zap } from 'lucide-react';
+import { NewraLoader } from '../../components/DataState';
+import { PROFILE_KEY, useAuth } from '../../features/auth/AuthProvider';
+import { householdStore } from '../../features/auth/household';
+import { CodeStep, ProfileGate, useCountdown } from '../../features/auth/ProfileGate';
+import { api } from '../../services/api';
+import { GesHousehold, GesLoginProfile, GesOtpChallenge } from '../../types/api';
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState('admin@newra.demo');
-  const [password, setPassword] = useState('NewraDemo#2026');
-  const [visible, setVisible] = useState(false);
+  const { signInWithCode, ready, user } = useAuth();
+  const router = useRouter();
+  const [remembered, setRemembered] = useState<GesHousehold | null>(null);
+  const [fromProfile, setFromProfile] = useState(false);
+  const [mode, setMode] = useState<'profiles' | 'email' | 'code'>('email');
+  const [email, setEmail] = useState('');
+  const [challenge, setChallenge] = useState<GesOtpChallenge | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState(0);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    const stored = householdStore.read();
+    if (!stored) return;
+    setRemembered(stored);
+    setMode('profiles');
+  }, []);
+
+  const secondsLeft = useCountdown(challenge?.resendInSeconds ?? 30, token);
+  const expiresLeft = useCountdown(challenge?.expiresInSeconds ?? 300, token);
+
+  async function sendToEmail(event?: FormEvent) {
+    event?.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await signIn(email, password);
+      const next = await api.requestGesOtpByEmail(email);
+      setFromProfile(false);
+      setChallenge(next);
+      setMode('code');
+      setToken((current) => current + 1);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to sign in.');
+      setError(cause instanceof Error ? cause.message : 'Unable to send the code.');
     } finally {
       setLoading(false);
     }
   }
 
+  async function sendToProfile(profile: GesLoginProfile) {
+    setError('');
+    setLoading(true);
+    try {
+      const next = await api.requestGesOtp(profile.id);
+      setFromProfile(true);
+      setChallenge(next);
+      setMode('code');
+      setToken((current) => current + 1);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to send the code.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verify(code: string) {
+    if (!challenge) return;
+    setError('');
+    setLoading(true);
+    try {
+      const signedIn = await signInWithCode(challenge.profileId, code);
+      if (fromProfile) {
+        window.sessionStorage.setItem(PROFILE_KEY, signedIn.id);
+        router.replace('/client/profile');
+      } else {
+        router.replace('/whos-watching');
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'That code could not be confirmed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!ready || user) return <NewraLoader label="Restoring your session" />;
+
+  if (mode === 'profiles' && remembered) {
+    return (
+      <>
+        <ProfileGate
+          gesName={remembered.gesName}
+          profiles={remembered.profiles}
+          onChoose={(profile) => { void sendToProfile(profile); }}
+          onForget={() => { householdStore.clear(); setMode('email'); }}
+        />
+        <div className="gate-actions">
+          <Link href="/signup">Create an account</Link>
+          {error && <p className="gate-error" role="alert">{error}</p>}
+        </div>
+      </>
+    );
+  }
+
+  if (mode === 'code' && challenge) {
+    return (
+      <CodeStep
+        title="Check your email"
+        detail={`Enter the 4-digit code sent to ${challenge.maskedEmail}. It works for 5 minutes.`}
+        devCode={challenge.devCode}
+        secondsLeft={secondsLeft}
+        expiresLeft={expiresLeft}
+        error={error}
+        onSubmit={verify}
+        onResend={() => { if (email) void sendToEmail(); else if (challenge) void api.requestGesOtp(challenge.profileId).then((next) => { setChallenge(next); setToken((current) => current + 1); }); }}
+        onBack={() => setMode(remembered ? 'profiles' : 'email')}
+      />
+    );
+  }
+
   return (
-    <main className="login-page">
-      <section className="login-brand-panel">
-        <div className="login-brand">
-          <span className="brand-mark"><Zap size={20} fill="currentColor" /></span>
-          <span>newra<span className="brand-dot">.</span></span>
-        </div>
-        <div className="login-story">
-          <div className="story-chip"><span className="live-dot" /> ENERGY PROCUREMENT INTELLIGENCE</div>
-          <h1>Make every<br />energy decision<br /><em>with confidence.</em></h1>
-          <p>One clear view across consumer requirements, provider capability, risk, and commercial fit.</p>
-          <div className="story-steps">
-            <div><span>01</span><strong>Understand the requirement</strong></div>
-            <div><span>02</span><strong>Compare real capability</strong></div>
-            <div><span>03</span><strong>Move with evidence</strong></div>
-          </div>
-        </div>
-        <div className="login-panel-foot"><ShieldCheck size={15} /> Internal NewRa workspace <span>•</span> Demo values are illustrative</div>
+    <main className="signin-page">
+      <section className="signin-hero">
+        <div className="gate-brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
+        <h1>Your energy decisions, in one place.</h1>
       </section>
-      <section className="login-form-panel">
-        <div className="login-form-wrap">
-          <div className="login-mobile-brand"><span className="brand-mark"><Zap size={19} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
-          <div className="login-label">WELCOME BACK</div>
-          <h2>Sign in to your workspace</h2>
-          <p className="login-sub">Use your internal credentials to continue.</p>
-          <form onSubmit={submit}>
-            <label className="field-label" htmlFor="email">Work email</label>
-            <input id="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
-            <label className="field-label password-label" htmlFor="password">Password</label>
-            <div className="password-field">
-              <input id="password" type={visible ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <button type="button" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
-            </div>
-            {error && <div className="form-error" role="alert">{error}</div>}
-            <button className="primary-button login-button" type="submit" disabled={loading}>
-              {loading ? 'Signing in…' : 'Sign in'} {!loading && <ArrowRight size={17} />}
-            </button>
-          </form>
-          <div className="demo-credential"><div className="demo-icon"><ShieldCheck size={16} /></div><div><strong>Demo access</strong><span>admin@newra.demo · Super Admin · NewraDemo#2026</span><span>newra.admin@newra.demo · NewRa Admin</span></div></div>
-          <div className="ges-login-list">
-            <strong>Individual GES logins</strong>
-            <span>ges.admin.aster@newra.demo · Aster GES Admin</span>
-            <span>ges.aster@newra.demo · Aster Manufacturing Group</span>
-            <span>ges.nova@newra.demo · Nova Industrial Works</span>
-            <span>ges.vertex@newra.demo · Vertex Metals &amp; Engineering</span>
-            <span>ges.helix@newra.demo · Helix Chemicals</span>
-            <span>Same password · NewraDemo#2026</span>
-          </div>
-          <div className="role-note">Role-based permissions are enforced by the API.</div>
-        </div>
-        <div className="login-copyright">© 2026 NewRa <span>•</span> Energy Decision Platform</div>
+      <section className="signin-panel">
+        <form className="signin-card" onSubmit={sendToEmail}>
+          <h2>Sign in</h2>
+          <p>Use the email that was accepted for your organisation.</p>
+          <label htmlFor="ges-email">Email</label>
+          <input id="ges-email" type="email" autoComplete="email" placeholder="name@company.com" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          {error && <div className="form-error" role="alert">{error}</div>}
+          <button className="primary-button" type="submit" disabled={loading}>{loading ? 'Sending code…' : 'Continue'}</button>
+          <p className="signin-switch">New organisation? <Link href={email ? `/signup?email=${encodeURIComponent(email)}` : '/signup'}>Create an account</Link></p>
+        </form>
       </section>
     </main>
   );

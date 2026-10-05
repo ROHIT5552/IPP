@@ -5,11 +5,11 @@ import { FormEvent, ReactNode, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageHeader } from '../../components/AppShell';
-import { ErrorState, LoadingState } from '../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../components/DataState';
 import { InfoTooltip } from '../terms/InfoTooltip';
 import { useAuth } from '../auth/AuthProvider';
 import { BESS_REQUIREMENTS, TECHNOLOGIES, bessKey, bessLabel, technologyKey, technologyLabel } from '../ges/options';
-import { api } from '../../services/api';
+import { api, listQuery } from '../../services/api';
 import { IppCatalogRow } from '../../types/api';
 import { amount, commercialStatus, inr, provenanceKind, provenanceLabel, selectionStatus, when, Provenance } from './format';
 
@@ -87,7 +87,7 @@ export function GesProfileScreen({ gesId }: { gesId: string }) {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Profile could not be saved'),
   });
-  if (query.isLoading) return <LoadingState />;
+  if (query.isLoading) return <PageSkeleton variant="detail" />;
   if (query.error || !query.data) return <ErrorState message="Unable to load this GES profile." retry={() => void query.refetch()} />;
   const profile = query.data;
   const draft = form ?? profile;
@@ -195,7 +195,8 @@ export function GesRequirementScreen({ gesId }: { gesId: string }) {
       notes: body.notes,
       commercialNotes: body.commercialNotes,
       annualEnergyGwh: user?.gesId ? undefined : body.annualEnergyGwh,
-      peakDemandMw: user?.gesId ? undefined : body.peakDemandMw,
+      requiredRenewableGwh: body.requiredRenewableGwh,
+      peakDemandMw: body.peakDemandMw,
     }),
     onSuccess: (requirement) => {
       client.setQueryData(['ges-requirement', gesId], requirement);
@@ -204,7 +205,7 @@ export function GesRequirementScreen({ gesId }: { gesId: string }) {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Requirement could not be saved'),
   });
-  if (query.isLoading) return <LoadingState />;
+  if (query.isLoading) return <PageSkeleton variant="form" />;
   if (query.error || !query.data) return <ErrorState message="Unable to load the GES requirement." retry={() => void query.refetch()} />;
   const requirement = form ?? query.data;
   const source = query.data.provenance ?? {};
@@ -222,9 +223,9 @@ export function GesRequirementScreen({ gesId }: { gesId: string }) {
         <div className="card-body form-grid">
           <div className="form-section"><h3>Energy requirement</h3></div>
           <Field label="Renewable target %" badge={source.renewableTargetPercent}><input type="number" min={0} max={100} step="0.1" disabled={!canEdit} value={requirement.renewableTargetPercent ?? ''} onChange={(event) => setForm({ ...requirement, renewableTargetPercent: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
-          <Field label="Required renewable energy" badge="CALCULATED"><div className="readonly-value">{requirement.requiredRenewableGwh == null ? 'Enter a target to calculate this' : `${amount(requirement.requiredRenewableGwh, 4)} GWh`}</div></Field>
+          <Field label="Required renewable energy" badge="CLIENT_PROVIDED"><input type="number" min={0} step="0.0001" disabled={!canEdit} value={requirement.requiredRenewableGwh ?? ''} onChange={(event) => setForm({ ...requirement, requiredRenewableGwh: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
           <Field label="Required energy (GWh)" badge={user?.gesId ? 'CALCULATED' : source.annualEnergyGwh}><input type="number" step="0.001" disabled={!canEdit || Boolean(user?.gesId)} value={requirement.annualEnergyGwh} onChange={(event) => setForm({ ...requirement, annualEnergyGwh: Number(event.target.value) })} /></Field>
-          <Field label="Required load (MW)" badge="BILL_VERIFIED"><div className="readonly-value">{requirement.peakDemandMw ? `${amount(requirement.peakDemandMw, 3)} MW` : '—'}</div></Field>
+          <Field label="Required load (MW)" badge="CLIENT_PROVIDED"><input type="number" min={0} step="0.001" disabled={!canEdit} value={requirement.peakDemandMw || ''} onChange={(event) => setForm({ ...requirement, peakDemandMw: event.target.value === '' ? 0 : Number(event.target.value) })} /></Field>
           <Field label="Target supply start" badge={source.targetCodYear}><input type="number" min={2024} max={2060} disabled={!canEdit} value={requirement.targetCodYear || ''} onChange={(event) => setForm({ ...requirement, targetCodYear: Number(event.target.value) })} /></Field>
           <Field label="Preferred technology" badge={source.preferredTechnologies}>
             <select disabled={!canEdit} value={technology} onChange={(event) => setForm({ ...requirement, preferredTechnologies: event.target.value && event.target.value !== 'NONE' ? event.target.value.split('+') : [] })}>
@@ -255,7 +256,7 @@ export function IppCatalogueScreen({ gesId, detailBase }: { gesId: string; detai
   const client = useQueryClient();
   const canConsider = Boolean(user?.permissions.includes('SELECTION_CREATE'));
   const [picked, setPicked] = useState<string[]>([]);
-  const catalog = useQuery({ queryKey: ['ipp-catalog', gesId, Boolean(user?.gesId)], queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog') });
+  const catalog = useQuery({ queryKey: ['ipp-catalog', gesId, Boolean(user?.gesId)], queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog'), ...listQuery });
   const selections = useQuery({ queryKey: ['ges-selections', gesId], queryFn: () => api.get<SelectionBoard>(`/ges/${gesId}/selections`) });
   const consider = useMutation({
     mutationFn: (ippId: string) => api.post<SelectionBoard>(`/ges/${gesId}/ipps/${ippId}/consider`),
@@ -267,7 +268,7 @@ export function IppCatalogueScreen({ gesId, detailBase }: { gesId: string; detai
     onError: (error) => toast.error(error instanceof Error ? error.message : 'This IPP could not be considered'),
   });
   const selected = useMemo(() => new Set(selections.data?.selections.map((item) => item.ippId) ?? []), [selections.data]);
-  if (catalog.isLoading) return <LoadingState />;
+  if (catalog.isLoading) return <PageSkeleton variant="table" />;
   if (catalog.error) return <ErrorState message="Unable to load the IPP catalogue." retry={() => void catalog.refetch()} />;
   const rows = catalog.data ?? [];
 
@@ -386,7 +387,7 @@ export function MyIppsScreen({ gesId }: { gesId: string }) {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Commercial requirement could not be saved'),
   });
-  if (query.isLoading) return <LoadingState />;
+  if (query.isLoading) return <PageSkeleton variant="cards" />;
   if (query.error || !query.data) return <ErrorState message="Unable to load IPP selections." retry={() => void query.refetch()} />;
   const board = query.data;
 
@@ -496,7 +497,7 @@ export function ClientIppScreen({ gesId, ippId }: { gesId: string; ippId: string
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'This IPP could not be considered'),
   });
-  if (query.isLoading) return <LoadingState />;
+  if (query.isLoading) return <PageSkeleton variant="detail" />;
   if (query.error || !query.data) return <ErrorState message="Unable to load this IPP." retry={() => void query.refetch()} />;
   const ipp = query.data;
   return (

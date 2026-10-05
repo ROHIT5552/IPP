@@ -166,7 +166,6 @@ export function IppAccountForm({ account, cancelHref = '/ipps' }: { account?: Ip
     onSuccess: async (rows) => {
       toast.success(account ? 'Independent power producer updated' : 'Independent power producer added');
       client.setQueryData(['ipp-catalog'], rows);
-      await client.invalidateQueries({ queryKey: ['ges'] });
       await client.invalidateQueries({ queryKey: ['dashboard'] });
       router.push(account ? `/ipps/${account.id}` : '/ipps');
     },

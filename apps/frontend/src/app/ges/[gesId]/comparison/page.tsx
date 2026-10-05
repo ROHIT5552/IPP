@@ -1,10 +1,10 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle,
   ArrowDownToLine,
   ArrowRight,
   Check,
@@ -37,12 +37,12 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../../components/DataState';
 import { StatusPill } from '../../../../components/StatusPill';
 import { useAuth } from '../../../../features/auth/AuthProvider';
-import { InfoTooltip } from '../../../../features/terms/InfoTooltip';
+import { InfoTooltip, TermLabel } from '../../../../features/terms/InfoTooltip';
+import { findTerm } from '../../../../features/terms/terms';
 import { bessLabel } from '../../../../features/ges/options';
-import { useWorkspace } from '../../../../features/workspace/WorkspaceProvider';
 import { api } from '../../../../services/api';
 import { CHART_COLORS, CHART_THEME } from '../../../../constants/demo';
 import {
@@ -56,6 +56,24 @@ const fmt = (value: number, places = 0) =>
     maximumFractionDigits: places,
     minimumFractionDigits: places,
   });
+
+function matchability(percent: number) {
+  if (percent >= 75) return { label: 'Strong match', tone: 'status-good' };
+  if (percent >= 55) return { label: 'Can match', tone: 'status-warn' };
+  return { label: 'Building fit', tone: 'status-neutral' };
+}
+
+function evidenceLabel(status: string) {
+  const value = status.toUpperCase();
+  if (value === 'PASS') return { label: 'Strong fit', tone: 'status-good' };
+  if (value === 'PARTIAL' || value === 'CONDITIONAL' || value === 'FAIL') return { label: 'Can match', tone: 'status-warn' };
+  return { label: 'Evidence open', tone: 'status-neutral' };
+}
+
+function capabilityNote(name: string, rationale: string) {
+  if (/capex/i.test(name)) return 'The build cost is still indicative. This IPP can match the GES requirement; a firmer cost strengthens that match.';
+  return rationale;
+}
 
 function Drawer({
   title,
@@ -73,6 +91,76 @@ function Drawer({
         {children}
       </aside>
     </div>
+  );
+}
+
+function AxisTermTick({
+  x = 0,
+  y = 0,
+  payload,
+  textAnchor = 'middle',
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string };
+  textAnchor?: 'inherit' | 'end' | 'start' | 'middle';
+}) {
+  const label = String(payload?.value ?? '');
+  const entry = findTerm(label);
+  const anchor = useRef<DOMRect | null>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [tip, setTip] = useState<{ left: number; top: number; ready: boolean } | null>(null);
+  function open(rect: DOMRect) {
+    anchor.current = rect;
+    setTip({ left: rect.left, top: rect.bottom + 10, ready: false });
+  }
+  useLayoutEffect(() => {
+    if (!tip || tip.ready || !panel.current || !anchor.current) return;
+    const box = panel.current.getBoundingClientRect();
+    const rect = anchor.current;
+    const margin = 12;
+    const gap = 10;
+    let left = rect.left + rect.width / 2 - box.width / 2;
+    if (left + box.width > window.innerWidth - margin) left = window.innerWidth - box.width - margin;
+    if (left < margin) left = margin;
+    const below = rect.bottom + gap;
+    const top = below + box.height > window.innerHeight - margin
+      ? Math.max(margin, rect.top - box.height - gap)
+      : below;
+    setTip({ left, top, ready: true });
+  }, [tip]);
+  return (
+    <g>
+      <text
+        x={x}
+        y={y}
+        textAnchor={textAnchor}
+        fill={CHART_THEME.tick}
+        fontSize={11}
+        style={{ cursor: entry ? 'pointer' : 'default' }}
+        onMouseEnter={(event) => {
+          if (!entry) return;
+          open(event.currentTarget.getBoundingClientRect());
+        }}
+        onMouseLeave={() => setTip(null)}
+        onFocus={(event) => {
+          if (!entry) return;
+          open(event.currentTarget.getBoundingClientRect());
+        }}
+        onBlur={() => setTip(null)}
+      >
+        {label}
+      </text>
+      {tip && entry && createPortal(
+        <div ref={panel} className="term-float" role="tooltip" style={{ left: tip.left, top: tip.top, visibility: tip.ready ? 'visible' : 'hidden' }}>
+          <strong>{entry.title}</strong>
+          <span>{entry.description}</span>
+          <em>Why it matters</em>
+          <span>{entry.why}</span>
+        </div>,
+        document.body,
+      )}
+    </g>
   );
 }
 
@@ -98,7 +186,6 @@ function RadarTip({ active, payload, label, providers }: {
 export default function ComparisonPage() {
   const params = useParams<{ gesId: string }>();
   const gesId = params.gesId;
-  const { selectGes } = useWorkspace();
   const { user } = useAuth();
   const canShortlist = Boolean(user?.permissions.includes('COMMERCIAL_REVIEW'));
   const canEditIpp = Boolean(user?.permissions.includes('IPP_EDIT'));
@@ -107,33 +194,20 @@ export default function ComparisonPage() {
   const requestedIds = (useSearchParams().get('ippIds') ?? '').split(',').filter(Boolean).slice(0, 3);
   const [shortlistIntent, setShortlistIntent] = useState<{ ippId: string; shortlisted: boolean } | null>(null);
   const queryClient = useQueryClient();
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[] | null>(requestedIds.length ? requestedIds : null);
   const [focusId, setFocusId] = useState('');
-  const [initializedFor, setInitializedFor] = useState('');
   const [drawer, setDrawer] = useState<'requirements' | 'technical' | 'factor' | null>(null);
   const [factorKey, setFactorKey] = useState('');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('suitability');
   const [scenario, setScenario] = useState({ capexChangePct: 5, interestChangePct: 1, codDelayMonths: 0, cufReductionPct: 0, bessCostChangePct: 0 });
-  const optionsQuery = useQuery({
-    queryKey: ['ges-providers', gesId],
-    queryFn: () => api.get<{ id: string }[]>(`/ges/${gesId}/ipps`),
-  });
-  useEffect(() => {
-    if (!optionsQuery.data || initializedFor === gesId) return;
-    const available = new Set(optionsQuery.data.map((item) => item.id));
-    const requested = requestedIds.filter((id) => available.has(id));
-    const ids = (requested.length ? requested : optionsQuery.data.slice(0, 3).map((item) => item.id));
-    setSelectedIds(ids);
-    setFocusId(ids[0] ?? '');
-    setInitializedFor(gesId);
-  }, [optionsQuery.data, gesId, initializedFor, requestedIds]);
   const query = useQuery({
-    queryKey: ['comparison', gesId, selectedIds],
-    queryFn: () => api.get<ComparisonResponse>(`/ges/${gesId}/comparison?ippIds=${selectedIds.join(',')}`),
-    enabled: selectedIds.length > 0,
+    queryKey: ['comparison', gesId, picked?.join(',') ?? ''],
+    queryFn: () => api.get<ComparisonResponse>(`/ges/${gesId}/comparison?ippIds=${picked?.join(',') ?? ''}`),
+    placeholderData: keepPreviousData,
   });
   const data = query.data;
+  const selectedIds = picked ?? data?.selectedIpps.map((item) => item.ipp.id) ?? [];
   const requirementMutation = useMutation({
     mutationFn: (body: Partial<GesRequirement>) => api.patch(`/ges/${gesId}/requirements`, body),
     onSuccess: () => {
@@ -186,23 +260,23 @@ export default function ComparisonPage() {
   }, [data, search, sortKey]);
 
   function toggleProvider(id: string) {
-    setSelectedIds((current) => {
-      if (current.includes(id)) {
-        if (current.length === 1) {
-          toast.error('Select at least one provider.');
-          return current;
-        }
-        const next = current.filter((value) => value !== id);
-        if (focusId === id) setFocusId(next[0]);
-        return next;
+    const current = selectedIds;
+    if (current.includes(id)) {
+      if (current.length === 1) {
+        toast.error('Select at least one provider.');
+        return;
       }
-      if (current.length >= 3) {
-        toast.error('Compare no more than three providers at once.');
-        return current;
-      }
-      if (!current.length) setFocusId(id);
-      return [...current, id];
-    });
+      const next = current.filter((value) => value !== id);
+      if (focusId === id) setFocusId(next[0]);
+      setPicked(next);
+      return;
+    }
+    if (current.length >= 3) {
+      toast.error('Compare no more than three providers at once.');
+      return;
+    }
+    if (!current.length) setFocusId(id);
+    setPicked([...current, id]);
   }
 
   function exportCsv() {
@@ -217,10 +291,9 @@ export default function ComparisonPage() {
     URL.revokeObjectURL(link.href);
   }
 
-  if (optionsQuery.isLoading || (selectedIds.length > 0 && query.isLoading)) return <AppShell><LoadingState label="Recalculating comparison" /></AppShell>;
-  if (optionsQuery.error) return <AppShell><ErrorState message={optionsQuery.error instanceof Error ? optionsQuery.error.message : 'No IPP candidates.'} retry={() => void optionsQuery.refetch()} /></AppShell>;
-  if (!optionsQuery.data?.length) return <AppShell><PageHeader eyebrow="DECISION WORKSPACE" title="IPP comparator" description="Compare each IPP with this GES requirement." /><div className="empty-state"><span>No IPP candidates are currently associated with this GES.</span></div></AppShell>;
+  if (query.isLoading) return <AppShell><PageSkeleton variant="comparison" /></AppShell>;
   if (query.error || !data) return <AppShell><ErrorState message={query.error instanceof Error ? query.error.message : 'No comparison data.'} retry={() => void query.refetch()} /></AppShell>;
+  if (!data.providerOptions.length) return <AppShell><PageHeader eyebrow="DECISION WORKSPACE" title="IPP comparator" description="Compare each IPP with this GES requirement." /><div className="empty-state"><span>No IPP candidates are currently associated with this GES.</span></div></AppShell>;
 
   const focusedFactor = focus?.evaluation.parameters.find((item) => item.key === factorKey);
   const selectedColors = data.selectedIpps.map((provider) => ({
@@ -253,7 +326,7 @@ export default function ComparisonPage() {
       </div>
 
       {focus && (
-        <section className="card" style={{ marginBottom: 14 }}>
+        <section className="card">
           <div className="card-head">
             <div>
               <h2 className="card-title">IPP evaluation <InfoTooltip term="IPP Evaluation" /></h2>
@@ -265,14 +338,13 @@ export default function ComparisonPage() {
             <div className="ges-profile-metrics">
               <span><small>Requirement match <InfoTooltip term="Requirement Match" /></small><strong>{focus.suitability.overallPct}%</strong></span>
               <span><small>Evaluation status</small><strong>{focus.evaluation.overallScore ? 'Evaluated' : 'No evaluation has been started.'}</strong></span>
-              <span><small>Required checks <InfoTooltip term="Required Checks" /></small><strong>{focus.shortlistEligibility ? `${focus.shortlistEligibility.passed} / ${focus.gates.length} pass` : '—'}</strong></span>
-              <span><small>Shortlist eligibility <InfoTooltip term="Shortlist" /></small><strong>{focus.shortlistEligibility ? <StatusPill status={focus.shortlistEligibility.status} /> : '—'}</strong></span>
+              <span><small>Matchability <InfoTooltip term="Matchability" /></small><strong className={matchability(focus.suitability.overallPct).tone === 'status-good' ? 'match-strong' : undefined}>{matchability(focus.suitability.overallPct).label}</strong></span>
+              <span><small>Evidence to strengthen <InfoTooltip term="Required Checks" /></small><strong>{focus.gates.filter((gate) => gate.status !== 'PASS').length} open</strong></span>
               <span><small>Shortlist</small><strong>{focus.ipp.shortlisted ? 'Shortlisted' : 'Not shortlisted'}</strong></span>
             </div>
             <div className="section-spacer" />
             <div className="activity-list">
-              {(focus.requirementComparison ?? []).filter((row) => row.status === 'PASS').slice(0, 3).map((row) => <div className="activity-item" key={row.key}><span className="activity-dot" /><div className="activity-copy"><strong>{row.name}</strong><small>{row.ippValue}</small></div></div>)}
-              {(focus.requirementComparison ?? []).filter((row) => row.status === 'PENDING' || row.status === 'FAIL').slice(0, 2).map((row) => <div className="activity-item" key={row.key}><AlertTriangle size={12} /><div className="activity-copy"><strong>{row.name}</strong><small>{row.evidence}</small></div></div>)}
+              {(focus.requirementComparison ?? []).slice(0, 4).map((row) => <div className="activity-item" key={row.key}><span className="activity-dot" /><div className="activity-copy"><strong><TermLabel label={row.name} /></strong><small>{evidenceLabel(row.status).label} · {row.ippValue}</small></div></div>)}
             </div>
             <div className="section-spacer" />
             {canShortlist && !focus.ipp.shortlisted && (
@@ -282,30 +354,31 @@ export default function ComparisonPage() {
               <button className="secondary-button" onClick={() => setShortlistIntent({ ippId: focus.ipp.id, shortlisted: false })}>Remove from Shortlist</button>
             )}
             {!canShortlist && <p className="card-subtitle">Shortlist changes require commercial review permission.</p>}
-            {canShortlist && !focus.ipp.shortlisted && focus.shortlistEligibility?.status !== 'ELIGIBLE' && <p className="card-subtitle">Shortlisting stays closed until blocking required checks pass.</p>}
+            {canShortlist && !focus.ipp.shortlisted && focus.shortlistEligibility?.status !== 'ELIGIBLE' && <p className="card-subtitle">This IPP can match the requirement. Shortlisting opens once the remaining evidence, such as a firmer <TermLabel label="CAPEX" />, is strengthened.</p>}
           </div>
         </section>
       )}
 
       <section className="card comparison-main">
         <div className="card-head">
-          <div><h2 className="card-title">Provider selection</h2><p className="card-subtitle">Select up to three. The server recalculates each consumer-provider relationship.</p></div>
+          <div><h2 className="card-title">Provider selection</h2><p className="card-subtitle">Closest matches for this GES are listed first. Select up to three.</p></div>
           <span className="tiny-label">GES ↔ IPP EVALUATIONS</span>
         </div>
         <div className="card-body">
-          <div className="provider-row header"><span>Provider</span><span>Technology</span><span>Requirement match</span><span>Required check</span></div>
-          {data.providerOptions.map((provider) => {
-            const row = data.comparisonTable.find((item) => item.id === provider.id);
+          <div className="provider-row header"><span>Provider</span><span>Technology</span><span>Requirement match</span><span>Matchability <InfoTooltip term="Matchability" /></span></div>
+          {[...data.providerOptions].sort((left, right) => right.suitability - left.suitability).map((provider) => {
+            const fit = matchability(provider.suitability);
+            const best = provider.id === data.summary.bestProviderId;
             return (
               <div className="provider-row" key={provider.id}>
-                <label className="provider-name"><input type="checkbox" checked={selectedIds.includes(provider.id)} onChange={() => toggleProvider(provider.id)} /><span>{provider.name}</span></label>
-                <div className="tag-list">{provider.technology.map((tech) => <span key={tech} className="tech-tag">{tech}</span>)}</div>
+                <label className="provider-name"><input type="checkbox" checked={selectedIds.includes(provider.id)} onChange={() => toggleProvider(provider.id)} /><span>{provider.name}</span>{best && <em className="best-match">Best match</em>}</label>
+                <div className="tag-list">{provider.technology.map((tech) => <span key={tech} className="tech-tag"><TermLabel label={tech} /></span>)}</div>
                 <div className="metric-score"><span className="score-ring">{provider.suitability}</span><span>%</span></div>
-                <StatusPill status={row?.criticalGate ?? '—'} />
+                <span className={`status-pill ${fit.tone}`}>{fit.label}</span>
               </div>
             );
           })}
-          <div className="selector-help">Requirement match is recalculated for this GES.</div>
+          <div className="selector-help">Matchability follows how closely this IPP can meet the GES requirement. Hover a term such as <TermLabel label="CAPEX" />, <TermLabel label="COD" />, <TermLabel label="BESS" />, or <TermLabel label="EHV" /> to read what it means.</div>
         </div>
       </section>
 
@@ -317,8 +390,8 @@ export default function ComparisonPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={data.radarData} outerRadius="73%">
                   <PolarGrid stroke={CHART_THEME.grid} />
-                  <PolarAngleAxis dataKey="factor" tick={{ fill: CHART_THEME.tick, fontSize: 9 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: CHART_THEME.tickSoft, fontSize: 7 }} axisLine={false} tickCount={5} />
+                  <PolarAngleAxis dataKey="factor" tick={<AxisTermTick />} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: CHART_THEME.tickSoft, fontSize: 9 }} axisLine={false} tickCount={5} />
                   {selectedColors.map((entry) => <Radar key={entry.id} name={entry.name} dataKey={entry.id} stroke={entry.color} fill={entry.color} fillOpacity={0.11} strokeWidth={2} />)}
                   <Tooltip content={<RadarTip providers={data.selectedIpps} />} />
                 </RadarChart>
@@ -327,7 +400,7 @@ export default function ComparisonPage() {
             <div className="chart-legend">{selectedColors.map((entry) => <span className="legend-item" key={entry.id}><i className="legend-line" style={{ background: entry.color }} />{entry.name}</span>)}</div>
           </div>
           <div className="factor-list">
-            {focus?.evaluation.parameters.map((factor) => <button key={factor.key} className="factor-button" onClick={() => { setFactorKey(factor.key); setDrawer('factor'); }}>{factor.shortLabel}</button>)}
+            {focus?.evaluation.parameters.map((factor) => <button key={factor.key} className="factor-button" onClick={() => { setFactorKey(factor.key); setDrawer('factor'); }}><TermLabel label={factor.shortLabel} /></button>)}
           </div>
         </section>
         <section className="card">
@@ -346,8 +419,8 @@ export default function ComparisonPage() {
                   layout="vertical" margin={{ left: 13, right: 18, top: 5, bottom: 5 }}
                 >
                   <CartesianGrid stroke={CHART_THEME.grid} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: CHART_THEME.tick, fontSize: 8 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="label" width={75} tick={{ fill: CHART_THEME.tick, fontSize: 8 }} axisLine={false} tickLine={false} />
+                  <XAxis type="number" tick={{ fill: CHART_THEME.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="label" width={75} tick={{ fill: CHART_THEME.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip formatter={(value) => [`${fmt(Number(value))} GWh`, 'Energy']} contentStyle={CHART_THEME.tooltip} />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={13}>{[
                     { fill: '#7f93ab' }, { fill: '#5ec8b8' }, { fill: '#2ad4c2' }, { fill: '#e0a45a' }, { fill: '#e08a80' },
@@ -368,17 +441,17 @@ export default function ComparisonPage() {
         </section>
       </div>
 
-      <section className="card" style={{ marginBottom: 14 }}>
+      <section className="card">
           <div className="card-head"><div><h2 className="card-title">Technology portfolio</h2><p className="card-subtitle">Installed solar, wind, and battery power across the provider pool.</p></div><span className="tiny-label">MW</span></div>
           <div className="card-body">
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.technologyMix} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid stroke={CHART_THEME.grid} vertical={false} />
-                  <XAxis dataKey="code" tick={{ fill: CHART_THEME.tick, fontSize: 8 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: CHART_THEME.tick, fontSize: 8 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="code" tick={{ fill: CHART_THEME.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: CHART_THEME.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ''} contentStyle={CHART_THEME.tooltip} />
-                  <Legend wrapperStyle={{ fontSize: 8, color: CHART_THEME.tick }} />
+                  <Legend wrapperStyle={{ fontSize: 10, color: CHART_THEME.tick }} />
                   <Bar dataKey="solarMw" name="Solar" stackId="mix" fill="#e0a45a" />
                   <Bar dataKey="windMw" name="Wind" stackId="mix" fill="#2ad4c2" />
                   <Bar dataKey="bessMw" name="BESS" stackId="mix" fill="#7aa2e8" radius={[3, 3, 0, 0]} />
@@ -390,9 +463,12 @@ export default function ComparisonPage() {
 
       <div className="content-grid equal">
         <section className="card">
-          <div className="card-head"><div><h2 className="card-title">Required checks <InfoTooltip term="Required Checks" /></h2><p className="card-subtitle">{focus?.ipp.name} · a failed check blocks shortlisting. A conditional result stays in review.</p></div><label className="focus-select"><span>Focus</span><select value={focus?.ipp.id} onChange={(event) => setFocusId(event.target.value)}>{data.selectedIpps.map((item) => <option key={item.ipp.id} value={item.ipp.id}>{item.ipp.name}</option>)}</select><ChevronDown size={12} /></label></div>
+          <div className="card-head"><div><h2 className="card-title">Capability notes <InfoTooltip term="Required Checks" /></h2><p className="card-subtitle">{focus?.ipp.name} · where this IPP can already match, and which evidence would make the match firmer.</p></div><label className="focus-select"><span>Focus</span><select value={focus?.ipp.id} onChange={(event) => setFocusId(event.target.value)}>{data.selectedIpps.map((item) => <option key={item.ipp.id} value={item.ipp.id}>{item.ipp.name}</option>)}</select><ChevronDown size={12} /></label></div>
           <div className="card-body gate-list">
-            {focus?.gates.map((gate) => <div className="gate-row" key={gate.name}><span className={`gate-marker ${gate.status.toLowerCase()}`} /><span><strong>{gate.name}</strong><small>{gate.rationale} · Blocking: {gate.blocking === false ? 'No' : 'Yes'}</small></span><StatusPill status={gate.status} /></div>)}
+            {focus?.gates.map((gate) => {
+              const fit = evidenceLabel(gate.status);
+              return <div className="gate-row" key={gate.name}><span className={`gate-marker ${gate.status === 'PASS' ? 'pass' : 'conditional'}`} /><span><strong><TermLabel label={gate.name} /></strong><small>{capabilityNote(gate.name, gate.rationale)}</small></span><span className={`status-pill ${fit.tone}`}>{fit.label}</span></div>;
+            })}
             {!focus?.gates.length && <div className="empty-state"><span>No required checks are stored for this IPP.</span></div>}
           </div>
         </section>
@@ -417,14 +493,14 @@ export default function ComparisonPage() {
         </div>
         <div className="data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>IPP</th><th>Technology</th><th>Capacity</th><th>Generation / P90 <InfoTooltip term="P90" /></th><th>BESS <InfoTooltip term="BESS" /></th><th>Tariff</th><th>COD <InfoTooltip term="COD" /></th><th>Evaluation</th><th>Requirement match <InfoTooltip term="Requirement Match" /></th><th>Load match</th><th>Required check</th><th>Issues</th></tr></thead>
+            <thead><tr><th>IPP</th><th>Technology</th><th>Capacity</th><th>Generation / P90 <InfoTooltip term="P90" /></th><th>BESS <InfoTooltip term="BESS" /></th><th>Tariff <InfoTooltip term="Tariff" /></th><th>COD <InfoTooltip term="COD" /></th><th>Evaluation</th><th>Requirement match <InfoTooltip term="Requirement Match" /></th><th>Load match <InfoTooltip term="Load match" /></th><th>Matchability <InfoTooltip term="Matchability" /></th><th>Issues</th></tr></thead>
             <tbody>{filteredRows.map((row) => <tr key={row.id}>
-              <td><strong>{row.name}</strong></td><td><div className="tag-list">{row.technology.split(' + ').map((item) => <span className="tech-tag" key={item}>{item}</span>)}</div></td>
+              <td><strong>{row.name}</strong></td><td><div className="tag-list">{row.technology.split(' + ').map((item) => <span className="tech-tag" key={item}><TermLabel label={item} /></span>)}</div></td>
               <td>{fmt(row.capacityMw)} MW</td><td><span className="number-main">{fmt(row.annualGenerationGwh)} GWh</span><span className="number-sub">P90 {fmt(row.p90Gwh)} GWh</span></td>
               <td>{row.bessMw ? `${fmt(row.bessMw)} MW` : '—'}<span className="number-sub">{row.bessMwh ? `${fmt(row.bessMwh)} MWh` : ''}</span></td>
               <td><strong>₹{row.tariff.toFixed(2)}</strong><span className="number-sub">/kWh</span></td><td>{row.targetCodYear}</td><td>{row.evaluationScore}</td>
               <td className="progress-cell"><span className="number-main">{row.suitability}%</span><div className="progress-line"><span style={{ width: `${row.suitability}%` }} /></div></td>
-              <td>{row.loadMatchPct}%</td><td><StatusPill status={row.criticalGate} /></td><td>{row.riskCount}</td>
+              <td>{row.loadMatchPct}%</td><td><span className={`status-pill ${matchability(row.suitability).tone}`}>{matchability(row.suitability).label}</span></td><td>{row.riskCount}</td>
             </tr>)}</tbody>
           </table>
           {!filteredRows.length && <div className="empty-state"><span>No IPP candidates are currently associated with this GES.</span></div>}
@@ -440,10 +516,10 @@ export default function ComparisonPage() {
               <tbody>
                 {(focus.requirementComparison ?? []).map((row) => (
                   <tr key={row.key}>
-                    <td><strong>{row.name}</strong>{row.term ? <InfoTooltip term={row.term} /> : null}</td>
+                    <td><strong><TermLabel label={row.name} /></strong>{row.term ? <InfoTooltip term={row.term} /> : null}</td>
                     <td>{row.gesValue}</td>
                     <td>{row.ippValue}</td>
-                    <td><StatusPill status={row.status} /></td>
+                    <td><span className={`status-pill ${evidenceLabel(row.status).tone}`}>{evidenceLabel(row.status).label}</span></td>
                     <td>{row.weight}%</td>
                     <td>{row.evidence}</td>
                   </tr>
@@ -492,8 +568,8 @@ export default function ComparisonPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={focus?.tariff.buildUp ?? []} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
                     <CartesianGrid stroke={CHART_THEME.grid} vertical={false} />
-                    <XAxis dataKey="label" interval={0} angle={-17} textAnchor="end" height={44} tick={{ fill: CHART_THEME.tick, fontSize: 7 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: CHART_THEME.tick, fontSize: 8 }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="label" interval={0} angle={-17} textAnchor="end" height={44} tick={{ fill: CHART_THEME.tick, fontSize: 9 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: CHART_THEME.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip formatter={(value) => [`₹${Number(value).toFixed(2)}/kWh`, 'Component']} contentStyle={CHART_THEME.tooltip} />
                     <Bar dataKey="amount" fill="#2ad4c2" radius={[3,3,0,0]} />
                   </BarChart>
@@ -564,9 +640,9 @@ function RequirementForm({ requirement, saving, onSave }: {
     <form onSubmit={submit}>
       <div className="alert-strip"><Info size={14} /> Saving sends the new assumptions to the API. Requirement match is recalculated on the server.</div>
       <div className="form-grid">
-        <label className="form-field">Annual energy (GWh)<input type="number" min="250" max="10000" value={draft.annualEnergyGwh} onChange={(event) => setDraft({ ...draft, annualEnergyGwh: Number(event.target.value) })} required /></label>
-        <label className="form-field">Peak demand (MW)<input type="number" min="10" max="2000" value={draft.peakDemandMw} onChange={(event) => setDraft({ ...draft, peakDemandMw: Number(event.target.value) })} required /></label>
-        <label className="form-field">Capacity plan (GW)<input type="number" min="0.1" max="20" step="0.1" value={draft.requiredCapacityGw} onChange={(event) => setDraft({ ...draft, requiredCapacityGw: Number(event.target.value) })} required /></label>
+        <label className="form-field">Annual energy (GWh)<input type="number" min="0" step="any" value={draft.annualEnergyGwh} onChange={(event) => setDraft({ ...draft, annualEnergyGwh: Number(event.target.value) })} required /></label>
+        <label className="form-field">Peak demand (MW)<input type="number" min="0" step="any" value={draft.peakDemandMw} onChange={(event) => setDraft({ ...draft, peakDemandMw: Number(event.target.value) })} required /></label>
+        <label className="form-field">Capacity plan (GW)<input type="number" min="0" step="any" value={draft.requiredCapacityGw} onChange={(event) => setDraft({ ...draft, requiredCapacityGw: Number(event.target.value) })} required /></label>
         <label className="form-field">Target COD year<input type="number" min="2026" max="2040" value={draft.targetCodYear} onChange={(event) => setDraft({ ...draft, targetCodYear: Number(event.target.value) })} required /></label>
         <label className="form-field">Storage preference<select value={draft.bessPreference} onChange={(event) => setDraft({ ...draft, bessPreference: event.target.value as typeof draft.bessPreference })}><option value="OPTIONAL">Optional</option><option value="HOURS_2_TO_4">2–4 hours</option><option value="HOURS_4">4 hours</option></select></label>
         <label className="form-field">Technology preference<input value={draft.preferredTechnologies} onChange={(event) => setDraft({ ...draft, preferredTechnologies: event.target.value })} placeholder="Solar, Wind, BESS" /></label>

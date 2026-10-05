@@ -136,9 +136,9 @@ export class ProcurementService {
       ...this.requirementBody(ges, target, required),
       provenance: {
         renewableTargetPercent: "CLIENT_PROVIDED",
-        requiredRenewableGwh: "CALCULATED",
+        requiredRenewableGwh: "CLIENT_PROVIDED",
         annualEnergyGwh: "CLIENT_PROVIDED",
-        peakDemandMw: "BILL_VERIFIED",
+        peakDemandMw: "CLIENT_PROVIDED",
         targetCodYear: "CLIENT_PROVIDED",
         preferredTechnologies: "CLIENT_PROVIDED",
         bessPreference: "CLIENT_PROVIDED",
@@ -423,7 +423,7 @@ export class ProcurementService {
 
   private roleLabel(actor: Actor) {
     const role = ["ADMIN", "NEWRA_ADMIN", "GES_ADMIN", "GES_USER", "EVALUATOR"].find((item) => actor.roles?.includes(item)) ?? actor.roles?.[0] ?? "";
-    if (role === "ADMIN") return "Super Admin";
+    if (role === "ADMIN") return "NewRa Grids";
     if (role === "NEWRA_ADMIN") return "NewRa Admin";
     if (role === "GES_ADMIN") return "GES Admin";
     if (role === "GES_USER") return "GES User";

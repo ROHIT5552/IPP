@@ -19,11 +19,11 @@ import {
   UsersRound,
   Zap,
 } from 'lucide-react';
-import { GES_ACCOUNTS } from '../constants/demo';
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, useEffect } from 'react';
+import { NewraLoader } from './DataState';
 import { useAuth } from '../features/auth/AuthProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { api } from '../services/api';
+import { api, listQuery } from '../services/api';
 import { GesAccount } from '../types/api';
 
 const staffPrimary = [
@@ -53,18 +53,33 @@ const staffWorkflow = [
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, ready, signOut } = useAuth();
+  useEffect(() => {
+    if (user?.gesId && pathname && pathname !== '/whos-watching') {
+      window.sessionStorage.setItem('newra.ges-return', pathname);
+    }
+  }, [user, pathname]);
   const { gesId, selectGes } = useWorkspace();
   const accountsQuery = useQuery({
     queryKey: ['ges'],
     queryFn: () => api.get<GesAccount[]>('/ges'),
     enabled: Boolean(user),
+    ...listQuery,
   });
   const liveAccounts = accountsQuery.data?.map((account) => ({ id: account.id, code: account.code, name: account.name, state: account.state ?? '' }));
+  useEffect(() => {
+    if (!user || user.gesId || !accountsQuery.data?.length) return;
+    if (accountsQuery.data.some((account) => account.id === gesId)) return;
+    const fromPath = pathname.match(/^\/ges\/(ges_[^/]+)/)?.[1];
+    const next = accountsQuery.data.find((account) => account.id === fromPath)?.id ?? accountsQuery.data[0].id;
+    selectGes(next);
+  }, [user, accountsQuery.data, gesId, pathname, selectGes]);
   const customer = Boolean(user?.gesId);
-  const primaryNav = customer ? customerPrimary : staffPrimary;
+  const primaryNav = customer
+    ? customerPrimary
+    : [...staffPrimary, ...(user?.role === 'ADMIN' ? [{ href: '/ges-access', label: 'GES access', icon: UsersRound }] : [])];
   const workflowNav = customer ? [] : staffWorkflow;
-  const accounts = (liveAccounts?.length ? liveAccounts : user ? [] : GES_ACCOUNTS).filter((item) => !user?.gesId || item.id === user.gesId);
+  const accounts = (liveAccounts ?? []).filter((item) => !user?.gesId || item.id === user.gesId);
   const currentGes = accounts.find((item) => item.id === gesId) ?? accounts[0];
   const isActive = (href: string) => {
     if (href === '/ges') return pathname === '/ges' || pathname === '/ges/new' || pathname.endsWith('/edit') || /^\/ges\/[^/]+$/.test(pathname);
@@ -84,10 +99,12 @@ export function AppShell({ children }: PropsWithChildren) {
     ['/comparison', '/negotiation', '/psoa', '/dealbook', '/profile', '/requirements', '/catalogue', '/selections'].includes(href)
       ? `/ges/${currentGes?.id ?? gesId}${href}`
       : href;
+  if (!ready || !user) return <NewraLoader label="Opening your workspace" />;
+
   const roleLabel = customer
     ? 'GES account'
     : user?.role === 'ADMIN'
-      ? 'Super Admin'
+      ? 'NewRa Grids'
       : user?.role === 'NEWRA_ADMIN'
         ? 'NewRa Admin'
         : (user?.role ?? '').replaceAll('_', ' ').toLowerCase();
@@ -95,7 +112,7 @@ export function AppShell({ children }: PropsWithChildren) {
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Link href="/dashboard" className="brand">
+        <Link href={customer ? '/client/profile' : '/dashboard'} className="brand">
           <span className="brand-mark"><Zap size={19} fill="currentColor" /></span>
           <span>newra<span className="brand-dot">.</span><small>ENERGY DECISIONS</small></span>
         </Link>
@@ -141,10 +158,14 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className="topbar-actions">
             <label className="ges-switcher">
               <span>GES account</span>
-              <select value={currentGes?.id ?? ''} onChange={(event) => selectGes(event.target.value)} aria-label="Select GES account" disabled={Boolean(user?.gesId) || !accounts.length}>
-                {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-              </select>
-              <ChevronDown size={14} />
+              {accountsQuery.isLoading ? <span className="skeleton skeleton-switch" aria-hidden="true" /> : (
+                <>
+                  <select value={currentGes?.id ?? ''} onChange={(event) => selectGes(event.target.value)} aria-label="Select GES account" disabled={Boolean(user?.gesId)}>
+                    {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                  </select>
+                  <ChevronDown size={14} />
+                </>
+              )}
             </label>
             <button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button>
             <button className="icon-button" aria-label="Settings"><Settings2 size={18} /></button>

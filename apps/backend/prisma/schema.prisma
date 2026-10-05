@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum GesAccessStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum RoleName {
   ADMIN
   NEWRA_ADMIN
@@ -220,6 +226,8 @@ model User {
   name          String
   passwordHash  String
   title         String
+  phone         String         @default("")
+  accessStatus  GesAccessStatus @default(APPROVED)
   active        Boolean        @default(true)
   gesId         String?
   createdAt     DateTime       @default(now())
@@ -235,6 +243,7 @@ model User {
   selectionsCreated GESIPPSelection[] @relation("SelectionCreator")
   selectionsUpdated GESIPPSelection[] @relation("SelectionUpdater")
   commercialRequirementsCreated CommercialRequirement[] @relation("CommercialCreator")
+  loginOtps     LoginOtp[]
 }
 
 model Role {
@@ -278,6 +287,20 @@ model RefreshToken {
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginOtp {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  resendAt   DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
 }

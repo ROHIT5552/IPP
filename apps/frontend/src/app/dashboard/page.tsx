@@ -16,12 +16,13 @@ import {
   Zap,
 } from 'lucide-react';
 import { AppShell, PageHeader } from '../../components/AppShell';
-import { ErrorState, LoadingState } from '../../components/DataState';
+import { ErrorState, NewraLoader, PageSkeleton } from '../../components/DataState';
 import { StatusPill } from '../../components/StatusPill';
 import { InfoTooltip } from '../../features/terms/InfoTooltip';
 import { bessLabel } from '../../features/ges/options';
 import { api } from '../../services/api';
 import { DashboardResponse, GesAccount } from '../../types/api';
+import { useAuth } from '../../features/auth/AuthProvider';
 import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
 
 const number = (value: number) => value.toLocaleString('en-IN');
@@ -179,13 +180,17 @@ function MetricCard({
 }
 
 export default function DashboardPage() {
+  const { user, ready } = useAuth();
   const { gesId } = useWorkspace();
+  const staff = ready && Boolean(user) && !user?.gesId;
   const query = useQuery({
     queryKey: ['dashboard', gesId],
     queryFn: () => api.get<DashboardResponse>(`/dashboard?gesId=${gesId}`),
+    enabled: staff && Boolean(gesId),
   });
 
-  if (query.isLoading) return <AppShell><LoadingState /></AppShell>;
+  if (!staff) return <NewraLoader label="Opening your workspace" />;
+  if (!gesId || query.isLoading) return <AppShell><PageSkeleton variant="dashboard" /></AppShell>;
   if (query.error || !query.data) {
     return <AppShell><ErrorState message={query.error instanceof Error ? query.error.message : 'API unavailable.'} retry={() => void query.refetch()} /></AppShell>;
   }

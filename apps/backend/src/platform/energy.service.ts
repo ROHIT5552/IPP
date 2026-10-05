@@ -619,9 +619,11 @@ export class EnergyService {
     const target = "renewableTargetPercent" in body || "renewableEnergyTargetPercent" in body
       ? optionalNumber(body.renewableTargetPercent ?? body.renewableEnergyTargetPercent)
       : current.renewableTargetPercent ?? ges.renewableEnergyTargetPercent;
-    const requiredRenewable = target != null && ges.annualConsumptionGwh > 0
-      ? round(ges.annualConsumptionGwh * (target / 100), 4)
-      : current.requiredRenewableGwh;
+    const requiredRenewable = "requiredRenewableGwh" in body
+      ? optionalNumber(body.requiredRenewableGwh)
+      : target != null && ges.annualConsumptionGwh > 0
+        ? round(ges.annualConsumptionGwh * (target / 100), 4)
+        : current.requiredRenewableGwh;
     const preferredTechnologies = "preferredTechnology" in body || Array.isArray(body.preferredTechnologies)
       ? technologiesFromPreference(body.preferredTechnology ?? body.preferredTechnologies, current.preferredTechnologies)
       : undefined;
@@ -644,7 +646,7 @@ export class EnergyService {
         annualEnergyGwh: customer
           ? requiredRenewable == null ? undefined : requiredRenewable
           : body.annualEnergyGwh == null ? requiredRenewable ?? undefined : number(body.annualEnergyGwh, current.annualEnergyGwh),
-        peakDemandMw: customer || body.peakDemandMw == null ? undefined : number(body.peakDemandMw, current.peakDemandMw),
+        peakDemandMw: body.peakDemandMw == null ? undefined : number(body.peakDemandMw, current.peakDemandMw),
         requiredCapacityGw: customer || body.requiredCapacityGw == null ? undefined : number(body.requiredCapacityGw, current.requiredCapacityGw),
         targetCodYear: body.targetCodYear == null && body.targetSupplyStartYear == null
           ? undefined
@@ -1202,12 +1204,37 @@ export class EnergyService {
   }
 
   async presentComparison(gesId: string, ippIds: string[], actor: Actor) {
-    const unique = [...new Set(ippIds.filter(Boolean))].slice(0, 3);
-    if (!unique.length) throw new BadRequestException("Select at least one IPP");
     const ges = await this.prisma.gES.findUnique({ where: { id: gesId }, include: { requirement: true } });
     if (!ges?.requirement) throw new NotFoundException("GES account was not found");
     const board = await this.ippBoard(gesId);
+    const ranked = [...board].sort((left, right) => right.suitability - left.suitability);
+    const linked = new Set(ranked.map((row) => row.id));
+    const requested = [...new Set(ippIds.filter(Boolean))].filter((id) => linked.has(id)).slice(0, 3);
+    const unique = requested.length ? requested : ranked.slice(0, 3).map((row) => row.id);
     const matches = await this.prisma.loadMatchResult.findMany({ where: { gesId } });
+    if (!unique.length) {
+      const account = this.toGesAccount(ges, 0);
+      return {
+        illustrative: true,
+        ges: {
+          ...account,
+          annualConsumptionGwh: ges.annualConsumptionGwh,
+          existingRooftopMw: ges.existingRooftopMw,
+          existingRenewableGwh: ges.existingRenewableGwh,
+          contractDemandMw: ges.contractDemandMw,
+          renewableEnergyTargetPercent: null,
+          peakRecordedDemandKva: null,
+          bessRequirement: null,
+        },
+        requirements: account.requirement,
+        providerOptions: [],
+        selectedIpps: [],
+        radarData: [],
+        technologyMix: [],
+        comparisonTable: [],
+        summary: { averageSuitability: 0, bestSuitability: 0, bestProviderId: "", bestProviderName: "" },
+      };
+    }
     const selected: Awaited<ReturnType<EnergyService["getIpp"]>>[] = [];
     for (const ippId of unique) selected.push(await this.getIpp(gesId, ippId, actor));
     const profiles = await loadIppProfiles(this.prisma, unique);
@@ -1235,7 +1262,7 @@ export class EnergyService {
         bessRequirement: gesProfile?.bessRequirement ?? null,
       },
       requirements: account.requirement,
-      providerOptions: board.map((row) => ({
+      providerOptions: ranked.map((row) => ({
         id: row.id,
         name: row.name,
         code: IPP_CODES[row.id] ?? "IPP",
