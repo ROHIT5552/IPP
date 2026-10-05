@@ -6,10 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { AppShell, PageHeader } from '../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../components/DataState';
+import { ErrorState, NewraLoader, PageSkeleton } from '../../../components/DataState';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { connectivityValue, includesBess } from '../../../features/ipp/options';
-import { api } from '../../../services/api';
+import { api, listQuery } from '../../../services/api';
 import { IppCatalogRow } from '../../../types/api';
 
 const SECTIONS = ['Overview', 'Generation', 'Technical', 'Grid and connectivity', 'BESS', 'Commercial', 'Financial', 'Execution', 'Regulatory', 'Documents', 'Evaluation'] as const;
@@ -36,10 +36,16 @@ export default function IppDetailsPage() {
   }, [user, router, ippId]);
   const canEdit = user?.permissions.includes('IPP_EDIT') ?? false;
   const [section, setSection] = useState<(typeof SECTIONS)[number]>('Overview');
-  const query = useQuery({ queryKey: ['ipp-catalog'], queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog') });
+  const query = useQuery({
+    queryKey: ['ipp-catalog'],
+    queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog'),
+    enabled: !user?.gesId,
+    ...listQuery,
+  });
   const ipp = query.data?.find((item) => item.id === ippId);
 
-  if (query.isLoading) return <AppShell><LoadingState /></AppShell>;
+  if (user?.gesId) return <NewraLoader label="Opening your workspace" />;
+  if (query.isLoading) return <AppShell><PageSkeleton variant="detail" /></AppShell>;
   if (!ipp) return <AppShell><ErrorState message="This independent power producer was not found." /></AppShell>;
 
   const storage = includesBess(ipp.technology) || ipp.bessMw > 0 || ipp.bessMwh > 0;

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Clock3, GitBranch, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../../components/DataState';
 import { StatusPill } from '../../../../components/StatusPill';
 import { api } from '../../../../services/api';
 import { OfferRecord, ProviderOption } from '../../../../types/api';
@@ -47,7 +47,7 @@ export default function NegotiationPage() {
     onError: (error) => toast.error(error.message),
   });
 
-  if (candidates.isLoading || offers.isLoading) return <AppShell><LoadingState label="Loading negotiation workbench" /></AppShell>;
+  if (candidates.isLoading || offers.isLoading) return <AppShell><PageSkeleton variant="split" /></AppShell>;
   if (candidates.error || offers.error) return <AppShell><ErrorState message="Negotiation data could not be loaded. Check the user's commercial permissions." retry={() => { void candidates.refetch(); void offers.refetch(); }} /></AppShell>;
   const selected = candidates.data?.find((candidate) => candidate.id === providerId);
 

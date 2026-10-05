@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileCheck2, FileClock } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../../components/DataState';
 import { StatusPill } from '../../../../components/StatusPill';
 import { api } from '../../../../services/api';
 
@@ -34,7 +34,7 @@ export default function DocumentsPage() {
     },
     onError: (error) => toast.error(error.message),
   });
-  if (query.isLoading) return <AppShell><LoadingState label="Loading document register" /></AppShell>;
+  if (query.isLoading) return <AppShell><PageSkeleton variant="table" /></AppShell>;
   if (query.error || !query.data) return <AppShell><ErrorState message="Document register unavailable. Your role may not have document access." retry={() => void query.refetch()} /></AppShell>;
   return (
     <AppShell>

@@ -5,17 +5,16 @@ import { useRouter } from 'next/navigation';
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Eye, Pencil, Plus, Search, Trash } from 'lucide-react';
+import { Eye, Pencil, Plus, Search, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../components/AppShell';
-import { ErrorState, LoadingState } from '../../components/DataState';
+import { ErrorState, NewraLoader, PageSkeleton } from '../../components/DataState';
+import { TablePagination } from '../../components/TablePagination';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { IppAccountForm } from '../../features/ipp/IppForm';
 import { includesBess } from '../../features/ipp/options';
-import { api } from '../../services/api';
+import { api, listQuery } from '../../services/api';
 import { IppCatalogRow } from '../../types/api';
-
-const PAGE_SIZES = [5, 10, 25];
 
 type SortKey = 'name' | 'capacity' | 'generation' | 'p90' | 'tariff' | 'cod';
 
@@ -64,7 +63,7 @@ function capacityText(ipp: IppCatalogRow) {
 }
 
 export default function IppRegisterPage() {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
   const router = useRouter();
   useEffect(() => {
     if (user?.gesId) router.replace('/client/ipps');
@@ -89,7 +88,8 @@ export default function IppRegisterPage() {
   const query = useQuery({
     queryKey: ['ipp-catalog'],
     queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog'),
-    refetchInterval: 15000,
+    enabled: ready && !user?.gesId,
+    ...listQuery,
   });
   const remove = useMutation({
     mutationFn: (id: string) => api.delete<IppCatalogRow[]>(`/ipps/${id}`),
@@ -97,7 +97,6 @@ export default function IppRegisterPage() {
       toast.success('Independent power producer deleted');
       setPendingDelete(null);
       client.setQueryData(['ipp-catalog'], rows);
-      void client.invalidateQueries({ queryKey: ['ges'] });
       void client.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Independent power producer could not be deleted'),
@@ -170,7 +169,8 @@ export default function IppRegisterPage() {
     }
   }
 
-  if (query.isLoading) return <AppShell><LoadingState /></AppShell>;
+  if (user?.gesId) return <NewraLoader label="Opening your workspace" />;
+  if (query.isLoading) return <AppShell><PageSkeleton variant="table" /></AppShell>;
   if (query.error) return <AppShell><ErrorState message="Unable to load independent power producers." retry={() => void query.refetch()} /></AppShell>;
   if (!rows.length && canCreate) return <AppShell><IppAccountForm /></AppShell>;
 
@@ -187,12 +187,12 @@ export default function IppRegisterPage() {
             <select className="filter-select" value={technology} onChange={(event) => setTechnology(event.target.value)} aria-label="Filter by technology">
               {technologies.map((item) => <option key={item} value={item}>{item === 'ALL' ? 'All technologies' : item}</option>)}
             </select>
-            {/* <select className="filter-select" value={projectState} onChange={(event) => setProjectState(event.target.value)} aria-label="Filter by project state">
+            <select className="filter-select" value={projectState} onChange={(event) => setProjectState(event.target.value)} aria-label="Filter by project state">
               {states.map((item) => <option key={item} value={item}>{item === 'ALL' ? 'All project states' : item}</option>)}
-            </select> */}
-            {/* <select className="filter-select" value={projectStatus} onChange={(event) => setProjectStatus(event.target.value)} aria-label="Filter by project status">
+            </select>
+            <select className="filter-select" value={projectStatus} onChange={(event) => setProjectStatus(event.target.value)} aria-label="Filter by project status">
               {statuses.map((item) => <option key={item} value={item}>{item === 'ALL' ? 'All project statuses' : item}</option>)}
-            </select> */}
+            </select>
             <select className="filter-select" value={bess} onChange={(event) => setBess(event.target.value)} aria-label="Filter by storage">
               <option value="ALL">All storage</option>
               <option value="WITH">With BESS</option>
@@ -294,21 +294,7 @@ export default function IppRegisterPage() {
           </table>
           {!visible.length && <div className="empty-state"><span>No independent power producer matches this search.</span></div>}
         </div>
-        <div className="table-pager">
-          <span>{filtered.length ? `${start + 1}–${Math.min(start + pageSize, filtered.length)} of ${filtered.length}` : '0 producers'}</span>
-          <div className="pager-controls">
-            <label>Rows
-              <select className="filter-select" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} aria-label="Rows per page" style={{ marginLeft: 6 }}>
-                {PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-              </select>
-            </label>
-            <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={currentPage === 1} aria-label="Previous page"><ChevronLeft size={14} /></button>
-            {Array.from({ length: pageCount }, (_, index) => index + 1).map((item) => (
-              <button type="button" key={item} onClick={() => setPage(item)} aria-current={item === currentPage ? 'page' : undefined}>{item}</button>
-            ))}
-            <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={currentPage === pageCount} aria-label="Next page"><ChevronRight size={14} /></button>
-          </div>
-        </div>
+        <TablePagination recordCount={filtered.length} currentPage={currentPage} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} recordLabel="producers" />
       </section>
     </AppShell>
   );

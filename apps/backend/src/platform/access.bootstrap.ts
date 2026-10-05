@@ -35,7 +35,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 };
 
 const ROLE_COPY: Record<string, string> = {
-  ADMIN: "Super Admin. Full platform access, including acting on behalf of a GES.",
+  ADMIN: "NewRa Grids. Full platform access, including acting on behalf of a GES.",
   NEWRA_ADMIN: "NewRa operations. Creates GES accounts and global IPP records without owning an IPP.",
   EVALUATOR: "Runs evaluations and keeps GES and IPP inputs current.",
   COMMERCIAL_REVIEWER: "Reviews tariff, negotiation and commercial terms.",
@@ -76,6 +76,7 @@ export class AccessBootstrap implements OnModuleInit {
     }
     const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
     for (const user of USERS) {
+      if (user.role === "ADMIN") continue;
       const existing = await this.prisma.user.findUnique({ where: { email: user.email } });
       if (existing) continue;
       const role = await this.prisma.role.findUnique({ where: { name: user.role as never } });
@@ -97,6 +98,49 @@ export class AccessBootstrap implements OnModuleInit {
         },
       });
       this.logger.log(`Created demo user ${user.email}`);
+    }
+    await this.ensureSuperAdmin();
+  }
+
+  private async ensureSuperAdmin() {
+    const email = process.env.SUPERADMIN_EMAIL?.trim() || "admin@example.com";
+    const role = await this.prisma.role.findUnique({ where: { name: "ADMIN" } });
+    if (!role) return;
+    const passwordHash = await bcrypt.hash("newra#2026", 10);
+    const others = await this.prisma.user.findMany({
+      where: { email: { not: email }, roles: { some: { roleId: role.id } } },
+      select: { id: true, email: true },
+    });
+    for (const other of others) {
+      await this.prisma.userRole.deleteMany({ where: { userId: other.id, roleId: role.id } });
+      await this.prisma.user.update({ where: { id: other.id }, data: { active: false } });
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: other.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      this.logger.log(`Removed superadmin login ${other.email}`);
+    }
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    const profile = {
+      name: "NewRa Grids",
+      title: "NewRa Grids",
+      passwordHash,
+      active: true,
+      accessStatus: "APPROVED" as const,
+      gesId: null,
+    };
+    const user = existing
+      ? await this.prisma.user.update({ where: { id: existing.id }, data: profile })
+      : await this.prisma.user.create({
+          data: { id: "usr_newra_grids", email, ...profile, roles: { create: [{ roleId: role.id }] } },
+        });
+    if (existing) {
+      await this.prisma.userRole.deleteMany({ where: { userId: user.id, roleId: { not: role.id } } });
+      await this.prisma.userRole.upsert({
+        where: { userId_roleId: { userId: user.id, roleId: role.id } },
+        update: {},
+        create: { userId: user.id, roleId: role.id },
+      });
     }
   }
 }

@@ -638,7 +638,6 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const USERS = [
-  { id: "usr_admin", email: "admin@newra.demo", name: "Asha Menon", title: "Platform administrator", role: "ADMIN" },
   { id: "usr_newra", email: "newra.admin@newra.demo", name: "Neha Kulkarni", title: "NewRa operations", role: "NEWRA_ADMIN" },
   { id: "usr_evaluator", email: "evaluator@newra.demo", name: "Rohan Iyer", title: "Lead evaluator", role: "EVALUATOR" },
   { id: "usr_commercial", email: "commercial@newra.demo", name: "Meera Shah", title: "Commercial reviewer", role: "COMMERCIAL_REVIEWER" },

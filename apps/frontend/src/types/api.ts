@@ -353,6 +353,41 @@ export interface OfferRecord {
   otherTerms: string;
 }
 
+export interface GesLoginProfile {
+  id: string;
+  gesId: string | null;
+  name: string;
+  gesName: string;
+  initials: string;
+}
+
+export interface GesAccessRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  gesId: string | null;
+  gesName: string;
+  role: string;
+  accessStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  active: boolean;
+}
+
+export interface GesHousehold {
+  gesId: string | null;
+  gesName: string;
+  profiles: GesLoginProfile[];
+}
+
+export interface GesOtpChallenge {
+  profileId: string;
+  maskedEmail: string;
+  resendInSeconds: number;
+  expiresInSeconds: number;
+  delivery: 'sent' | 'logged';
+  devCode?: string;
+}
+
 export interface PsoaRecord {
   ippId: string;
   ippName: string;

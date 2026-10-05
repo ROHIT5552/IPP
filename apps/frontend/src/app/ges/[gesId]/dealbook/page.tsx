@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpenCheck, Download, FileText } from 'lucide-react';
 import { AppShell, PageHeader } from '../../../../components/AppShell';
-import { ErrorState, LoadingState } from '../../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../../components/DataState';
 import { StatusPill } from '../../../../components/StatusPill';
 import { api } from '../../../../services/api';
 
@@ -30,7 +30,7 @@ interface DealbookRecord {
 export default function DealbookPage() {
   const { gesId } = useParams<{ gesId: string }>();
   const query = useQuery({ queryKey: ['dealbook', gesId], queryFn: () => api.get<DealbookRecord[]>(`/ges/${gesId}/dealbook`) });
-  if (query.isLoading) return <AppShell><LoadingState label="Compiling decision record" /></AppShell>;
+  if (query.isLoading) return <AppShell><PageSkeleton variant="cards" /></AppShell>;
   if (query.error || !query.data) return <AppShell><ErrorState message="The dealbook could not be compiled." retry={() => void query.refetch()} /></AppShell>;
   const records = query.data;
   const exportDealbook = () => {

@@ -15,7 +15,7 @@ const WorkspaceContext = createContext<WorkspaceState | null>(null);
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const lockedGes = user?.gesId || null;
-  const [gesId, setGesId] = useState(lockedGes || 'ges_aster');
+  const [gesId, setGesId] = useState(lockedGes || '');
   const router = useRouter();
   const pathname = usePathname();
 
@@ -39,7 +39,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     if (lockedGes && id !== lockedGes) return;
     setGesId(id);
     const route = window.location.pathname;
-    if (/^\/ges\/ges_/.test(route)) {
+    if (/^\/ges\/ges_/.test(route) && !route.startsWith(`/ges/${id}`)) {
       router.push(route.replace(/^\/ges\/[^/]+/, `/ges/${id}`));
     }
   };
