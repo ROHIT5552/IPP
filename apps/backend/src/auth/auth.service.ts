@@ -435,7 +435,8 @@ export class AuthService {
   }
 
   private assertSuperAdmin(actor: { roles?: string[] }) {
-    if (!actor.roles?.includes("ADMIN")) throw new ForbiddenException("Only NewRa Grids can manage GES access");
+    const allowed = actor.roles?.some((role) => role === "ADMIN" || role === "NEWRA_ADMIN");
+    if (!allowed) throw new ForbiddenException("Only NewRa Grids can manage GES access");
   }
 
   private async createSignupUser(name: string, email: string, gesName: string, phone: string) {
