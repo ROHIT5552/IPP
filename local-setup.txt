@@ -1,0 +1,114 @@
+GES–IPP Comparator — from start
+=================================
+
+Run every command from the repository root in PowerShell.
+
+Requirements
+------------
+- Node.js LTS
+- Docker Desktop
+
+
+1. Install and start the database
+----------------------------------
+
+npm install --prefix apps/backend
+npm install --prefix apps/frontend
+Copy-Item apps/backend/.env.example apps/backend/.env
+npm run db:up
+npm run prisma:generate --prefix apps/backend
+npm run db:migrate
+npm run db:seed
+
+Postgres listens on port 5435.
+Database name: newra_comparator
+User: newra
+Password: newra
+Container: newra-comparator-postgres
+
+
+2. Check the database
+---------------------
+
+List every table:
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator -c "\dt"
+
+Row count for every table:
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator -c "SELECT relname AS table_name, n_live_tup AS rows FROM pg_stat_user_tables ORDER BY relname;"
+
+Users:
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator -c "SELECT email, name, title, \"gesId\", active, \"accessStatus\" FROM \"User\" ORDER BY email;"
+
+Roles on each user:
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator -c "SELECT u.email, r.name AS role FROM \"User\" u JOIN \"UserRole\" ur ON ur.\"userId\" = u.id JOIN \"Role\" r ON r.id = ur.\"roleId\" ORDER BY u.email;"
+
+GES accounts:
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator -c "SELECT id, name, state, \"contractDemandMw\", \"annualConsumptionGwh\" FROM \"GES\" ORDER BY name;"
+
+IPP records:
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator -c "SELECT name, \"legalName\", \"solarMw\", \"windMw\", \"indicativeTariffInrPerKwh\", \"evaluationStage\" FROM \"IPP\" ORDER BY name;"
+
+Open a SQL prompt (table names are case-sensitive, so keep the double quotes):
+
+docker exec -it newra-comparator-postgres psql -U newra -d newra_comparator
+
+Inside that prompt:
+  \dt
+  SELECT * FROM "IPP" LIMIT 20;
+  \q
+
+
+3. Run the app
+--------------
+
+Use two terminals.
+
+Terminal 1:
+
+npm run dev:api
+
+Terminal 2:
+
+npm run dev:web
+
+App:        http://localhost:3010
+Login:      http://localhost:3010/login
+API health: http://localhost:4010/api/health
+
+The API must be the one on port 4010. If another app is already using 4010, stop that app first.
+
+
+4. Sign in
+----------
+
+Demo password for staff and GES accounts: NewraDemo#2026
+This password is only for the local seeded database.
+The email decides whether the login is staff or GES.
+
+Staff (no GES access tab):
+  newra.admin@newra.demo
+  evaluator@newra.demo
+  commercial@newra.demo
+  technical@newra.demo
+  finance@newra.demo
+  viewer@newra.demo
+
+GES (no GES access tab):
+  ges.aster@newra.demo
+  ges.admin.aster@newra.demo
+  ges.nova@newra.demo
+  ges.vertex@newra.demo
+  ges.helix@newra.demo
+
+GES access tab (ADMIN only):
+  Email is SUPERADMIN_EMAIL in apps/backend/.env
+  On this machine: rohithiwrale6000@gmail.com
+  Password: newra#2026
+  After sign-in, open the left sidebar under PLATFORM, or go to:
+  http://localhost:3010/ges-access
