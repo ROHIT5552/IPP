@@ -75,9 +75,10 @@ export function AppShell({ children }: PropsWithChildren) {
     selectGes(next);
   }, [user, accountsQuery.data, gesId, pathname, selectGes]);
   const customer = Boolean(user?.gesId);
+  const canManageGesAccess = user?.role === 'ADMIN' || user?.role === 'NEWRA_ADMIN';
   const primaryNav = customer
     ? customerPrimary
-    : [...staffPrimary, ...(user?.role === 'ADMIN' ? [{ href: '/ges-access', label: 'GES access', icon: UsersRound }] : [])];
+    : [...staffPrimary, ...(canManageGesAccess ? [{ href: '/ges-access', label: 'GES access', icon: UsersRound }] : [])];
   const workflowNav = customer ? [] : staffWorkflow;
   const accounts = (liveAccounts ?? []).filter((item) => !user?.gesId || item.id === user.gesId);
   const currentGes = accounts.find((item) => item.id === gesId) ?? accounts[0];
