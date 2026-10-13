@@ -1,143 +1,68 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
+import { FactorChartModal } from '../../../features/ipp/FactorChartModal';
+import { useWorkspace } from '../../../features/workspace/WorkspaceProvider';
+import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../components/AppShell';
-import { ErrorState, NewraLoader, PageSkeleton } from '../../../components/DataState';
+import { ErrorState, PageSkeleton } from '../../../components/DataState';
 import { useAuth } from '../../../features/auth/AuthProvider';
-import { connectivityValue, includesBess } from '../../../features/ipp/options';
 import { api, listQuery } from '../../../services/api';
 import { IppCatalogRow } from '../../../types/api';
-
-const SECTIONS = ['Overview', 'Generation', 'Technical', 'Grid and connectivity', 'BESS', 'Commercial', 'Financial', 'Execution', 'Regulatory', 'Documents', 'Evaluation'] as const;
-
-function amount(value: number | null | undefined, digits = 1) {
-  if (value == null || Number.isNaN(value)) return '—';
-  return value.toLocaleString('en-IN', { maximumFractionDigits: digits });
-}
-
-function text(value?: string | null) {
-  return value?.trim() ? value : 'Not specified';
-}
-
-function Item({ label, value }: { label: string; value: string }) {
-  return <div className="info-item"><small>{label}</small><strong>{value}</strong></div>;
-}
 
 export default function IppDetailsPage() {
   const { ippId } = useParams<{ ippId: string }>();
   const { user } = useAuth();
-  const router = useRouter();
-  useEffect(() => {
-    if (user?.gesId) router.replace(`/client/ipps/${ippId}`);
-  }, [user, router, ippId]);
+  const { gesId } = useWorkspace();
+  const client = useQueryClient();
   const canEdit = user?.permissions.includes('IPP_EDIT') ?? false;
-  const [section, setSection] = useState<(typeof SECTIONS)[number]>('Overview');
-  const query = useQuery({
-    queryKey: ['ipp-catalog'],
-    queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog'),
-    enabled: !user?.gesId,
-    ...listQuery,
-  });
+  const query = useQuery({ queryKey: ['ipp-catalog'], queryFn: () => api.get<IppCatalogRow[]>('/ipp-catalog'), ...listQuery });
   const ipp = query.data?.find((item) => item.id === ippId);
+  const [notes, setNotes] = useState<string | null>(null);
+  const [chartOpen, setChartOpen] = useState(false);
+  const chartGes = user?.gesId || gesId;
+  const save = useMutation({
+    mutationFn: () => api.patch<IppCatalogRow[]>(`/ipps/${ippId}/notes`, { notes: notes ?? ipp?.notes ?? '' }),
+    onSuccess: (rows) => {
+      client.setQueryData(['ipp-catalog'], rows);
+      toast.success('Notes saved');
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Notes could not be saved'),
+  });
 
-  if (user?.gesId) return <NewraLoader label="Opening your workspace" />;
   if (query.isLoading) return <AppShell><PageSkeleton variant="detail" /></AppShell>;
-  if (!ipp) return <AppShell><ErrorState message="This independent power producer was not found." /></AppShell>;
-
-  const storage = includesBess(ipp.technology) || ipp.bessMw > 0 || ipp.bessMwh > 0;
-  const duration = ipp.bessMw > 0 && ipp.bessMwh > 0 ? ipp.bessMwh / ipp.bessMw : null;
-  const bessText = !storage ? 'None' : ipp.bessMw > 0 || ipp.bessMwh > 0 ? `${amount(ipp.bessMw)} MW / ${amount(ipp.bessMwh)} MWh` : '—';
-  const place = [ipp.projectLocation, ipp.projectDistrict, ipp.projectState].filter(Boolean).join(', ');
+  if (!ipp) return <AppShell><ErrorState message="This IPP was not found." /></AppShell>;
 
   return (
     <AppShell>
-      <PageHeader eyebrow={ipp.code} title={ipp.name} description={ipp.projectName || 'Project name not specified'}>
+      <PageHeader eyebrow="INDEPENDENT POWER PRODUCER" title={ipp.name} description={ipp.referenceNo || undefined}>
+        {chartGes && <button className="secondary-button" type="button" onClick={() => setChartOpen(true)}>View chart</button>}
         {canEdit && <Link className="primary-button" href={`/ipps/${ipp.id}/edit`}><Pencil size={14} /> Edit IPP</Link>}
       </PageHeader>
-      <div className="ipp-section-nav">
-        {SECTIONS.map((item) => (
-          <button key={item} className={item === section ? 'small-button' : 'secondary-button'} type="button" onClick={() => setSection(item)}>{item}</button>
-        ))}
-      </div>
       <section className="card">
         <div className="card-body info-grid">
-          {section === 'Overview' && (
-            <>
-              <Item label="IPP name" value={ipp.name} />
-              <Item label="Project name" value={text(ipp.projectName)} />
-              <Item label="Headquarters" value={text(ipp.headquarters)} />
-              <Item label="Project location" value={text(place)} />
-              <Item label="Technology" value={text(ipp.technology)} />
-              <Item label="Solar capacity" value={ipp.solarMw > 0 ? `${amount(ipp.solarMw)} MW` : '—'} />
-              <Item label="Wind capacity" value={ipp.windMw > 0 ? `${amount(ipp.windMw)} MW` : '—'} />
-              <Item label="BESS" value={bessText} />
-              <Item label="Annual generation" value={`${amount(ipp.annualGenerationGwh)} GWh/year`} />
-              <Item label="P90 generation" value={ipp.p90Gwh ? `${amount(ipp.p90Gwh)} GWh/year` : '—'} />
-              <Item label="Tariff" value={`₹${ipp.tariff.toFixed(2)}/kWh`} />
-              <Item label="Expected COD" value={ipp.codYear && ipp.codYear > 0 ? String(ipp.codYear) : 'Not specified'} />
-              <Item label="Project status" value={text(ipp.projectStatus)} />
-              <Item label="Firm / FDRE capability" value={text(ipp.fdreCapability)} />
-            </>
-          )}
-          {section === 'Generation' && (
-            <>
-              <Item label="Annual generation" value={`${amount(ipp.annualGenerationGwh)} GWh/year`} />
-              <Item label="P90 generation" value={ipp.p90Gwh ? `${amount(ipp.p90Gwh)} GWh/year` : '—'} />
-              <Item label="15-minute generation data" value={text(ipp.generationData15Min)} />
-              <Item label="Firm / FDRE capability" value={text(ipp.fdreCapability)} />
-            </>
-          )}
-          {section === 'Technical' && (
-            <>
-              <Item label="Technology" value={text(ipp.technology)} />
-              <Item label="Solar capacity" value={ipp.solarMw > 0 ? `${amount(ipp.solarMw)} MW` : '—'} />
-              <Item label="Wind capacity" value={ipp.windMw > 0 ? `${amount(ipp.windMw)} MW` : '—'} />
-            </>
-          )}
-          {section === 'Grid and connectivity' && (
-            <>
-              <Item label="Grid voltage" value={text(ipp.gridVoltage)} />
-              <Item label="Grid connectivity" value={text(connectivityValue(ipp.gridConnectivity, ipp.engineConnectivity) || null)} />
-              <Item label="Open access readiness" value={text(ipp.openAccessReadiness)} />
-            </>
-          )}
-          {section === 'BESS' && (
-            <>
-              <Item label="BESS power" value={storage && ipp.bessMw > 0 ? `${amount(ipp.bessMw)} MW` : storage ? '—' : 'None'} />
-              <Item label="BESS storage" value={storage && ipp.bessMwh > 0 ? `${amount(ipp.bessMwh)} MWh` : storage ? '—' : 'None'} />
-              <Item label="BESS duration" value={duration === null ? '—' : `${amount(duration, 2)} hours`} />
-            </>
-          )}
-          {section === 'Commercial' && (
-            <>
-              <Item label="Tariff" value={`₹${ipp.tariff.toFixed(2)}/kWh`} />
-              <Item label="Tariff type" value={text(ipp.tariffType)} />
-              <Item label="Contract tenure" value={ipp.contractTenureYears ? `${amount(ipp.contractTenureYears, 0)} years` : 'Not specified'} />
-            </>
-          )}
-          {section === 'Financial' && (
-            <>
-              <Item label="Financial model available" value={text(ipp.financialModelAvailable)} />
-              <Item label="Funding status" value={text(ipp.fundingStatus)} />
-              <Item label="Estimated CAPEX" value={ipp.estimatedCapexCr ? `₹${amount(ipp.estimatedCapexCr, 2)} crore` : '—'} />
-            </>
-          )}
-          {section === 'Execution' && (
-            <>
-              <Item label="Project status" value={text(ipp.projectStatus)} />
-              <Item label="Expected COD year" value={ipp.codYear && ipp.codYear > 0 ? String(ipp.codYear) : 'Not specified'} />
-              <Item label="COD confidence" value={text(ipp.codConfidence)} />
-            </>
-          )}
-          {section === 'Regulatory' && <Item label="Regulatory position" value="Not specified" />}
-          {section === 'Documents' && <Item label="Documents" value="Not specified" />}
-          {section === 'Evaluation' && <Item label="Scored comparison" value="Open a GES comparator to see this project’s evaluation." />}
+          <div className="info-item"><small>No.</small><strong>{ipp.referenceNo || '—'}</strong></div>
+          <div className="info-item"><small>IPP / company</small><strong>{ipp.name}</strong></div>
+          <div className="info-item"><small>Proposed LOI scope</small><strong>{ipp.loiScope || '—'}</strong></div>
+          <div className="info-item"><small>Portfolio / capacity</small><strong>{ipp.portfolioCapacity || '—'}</strong></div>
+          <div className="info-item"><small>Head office</small><strong>{ipp.headquarters || '—'}</strong></div>
+          <div className="info-item"><small>Company leadership</small><strong>{ipp.leadership || '—'}</strong></div>
+          <div className="info-item"><small>Key contact</small><strong>{ipp.keyContact || '—'}</strong></div>
+          <div className="info-item"><small>CIN</small><strong>{ipp.cin || '—'}</strong></div>
+        </div>
+        <div className="card-body">
+          <label className="form-field">
+            Notes
+            <textarea value={notes ?? ipp.notes ?? ''} onChange={(event) => setNotes(event.target.value)} />
+          </label>
+          <button className="primary-button" type="button" style={{ marginTop: 8 }} disabled={save.isPending} onClick={() => save.mutate()}>Save notes</button>
         </div>
       </section>
+      {chartOpen && chartGes && <FactorChartModal gesId={chartGes} ippId={ipp.id} ippName={ipp.name} onClose={() => setChartOpen(false)} />}
     </AppShell>
   );
 }

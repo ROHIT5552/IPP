@@ -59,6 +59,8 @@ export interface GesAccount {
   peakRecordedDemandKva?: number | null;
   bessRequirement?: string | null;
   notes?: string;
+  plantAddress?: string;
+  zoneConsumption?: { period: 'annual' | 'monthly'; zones: { name: string; value: number }[] } | null;
   stage: string;
   requirement: GesRequirement;
   candidateCount?: number;
@@ -111,6 +113,13 @@ export interface IppCatalogRow {
   financialModelAvailable: string | null;
   fundingStatus: string | null;
   estimatedCapexCr: number | null;
+  referenceNo?: string;
+  loiScope?: string;
+  portfolioCapacity?: string;
+  leadership?: string;
+  keyContact?: string;
+  cin?: string;
+  notes?: string;
   gesCount: number;
   gesNames: string[];
   selectedByCurrentGes?: boolean;

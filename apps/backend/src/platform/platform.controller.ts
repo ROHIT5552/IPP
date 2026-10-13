@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, StreamableFile } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, Res, StreamableFile } from "@nestjs/common";
 import { Request, Response } from "express";
 import { Public, RequirePermissions } from "../common/http";
 import { EnergyService } from "./energy.service";
 import { ProcurementService } from "./procurement.service";
+import { QuestionnaireService } from "./questionnaire.service";
 
 type RequestUser = Request & { user: { id: string; name?: string; permissions: string[]; roles?: string[]; gesId?: string | null } };
 
@@ -15,6 +16,7 @@ export class PlatformController {
   constructor(
     private readonly energy: EnergyService,
     private readonly procurement: ProcurementService,
+    private readonly questionnaire: QuestionnaireService,
   ) {}
 
   @Public()
@@ -135,6 +137,12 @@ export class PlatformController {
   @Post("ipps")
   createIpp(@Body() body: Record<string, unknown>, @Req() request: RequestUser) {
     return this.energy.createIpp(body, request.user);
+  }
+
+  @RequirePermissions("IPP_VIEW")
+  @Patch("ipps/:id/notes")
+  saveIppNotes(@Param("id") id: string, @Body() body: { notes?: string }, @Req() request: RequestUser) {
+    return this.energy.saveIppNotes(id, String(body.notes ?? ""), request.user);
   }
 
   @RequirePermissions("IPP_EDIT")
@@ -372,5 +380,37 @@ export class PlatformController {
   @Get("roles")
   roles() {
     return this.energy.roles();
+  }
+
+  @RequirePermissions("GES_VIEW")
+  @Get("ges/:gesId/questionnaire")
+  loadQuestionnaire(@Param("gesId") gesId: string, @Query("ippId") ippId: string) {
+    return this.questionnaire.get(gesId, ippId);
+  }
+
+  @RequirePermissions("GES_VIEW")
+  @Get("ges/:gesId/tariff-negotiations")
+  tariffNegotiations(@Param("gesId") gesId: string) {
+    return this.questionnaire.tariffBoard(gesId);
+  }
+
+  @RequirePermissions("GES_EDIT")
+  @Put("ges/:gesId/tariff-negotiations")
+  saveTariffNegotiations(
+    @Param("gesId") gesId: string,
+    @Body() body: { negotiations?: unknown },
+    @Req() request: RequestUser,
+  ) {
+    return this.questionnaire.saveTariffBoard(gesId, body.negotiations ?? [], request.user.id);
+  }
+
+  @RequirePermissions("GES_PROFILE_EDIT")
+  @Put("ges/:gesId/questionnaire")
+  saveQuestionnaire(
+    @Param("gesId") gesId: string,
+    @Body() body: { ippId?: string; answers?: Record<string, unknown>; sectionRatings?: Record<string, unknown> },
+    @Req() request: RequestUser,
+  ) {
+    return this.questionnaire.save(gesId, String(body.ippId ?? ""), body.answers ?? {}, body.sectionRatings ?? {}, request.user.id);
   }
 }

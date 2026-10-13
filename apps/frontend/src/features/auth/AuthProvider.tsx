@@ -26,11 +26,8 @@ interface AuthState {
 
 export function destinationFor(current: AuthUser | null) {
   if (!current) return '/login';
-  if (!current.gesId) return '/dashboard';
-  if (window.sessionStorage.getItem(PROFILE_KEY) !== current.id) return '/whos-watching';
-  const saved = window.sessionStorage.getItem(RETURN_KEY);
-  if (saved && saved.startsWith('/') && saved !== '/login' && saved !== '/dashboard') return saved;
-  return '/client/profile';
+  if (current.gesId) return '/client/profile';
+  return '/ges';
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -63,18 +60,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!ready || pathname === '/staff') return;
-    const publicPage = pathname === '/login' || pathname === '/signup';
+    const publicPage = pathname === '/' || pathname === '/login' || pathname === '/signup';
     if (!user) {
       if (!publicPage) router.replace('/login');
       return;
     }
     const destination = destinationFor(user);
     if (destination === pathname) return;
-    if (!user.gesId) {
-      if (publicPage || pathname === '/whos-watching') router.replace(destination);
-      return;
-    }
-    if (publicPage || pathname === '/whos-watching' || pathname === '/dashboard' || pathname === '/') {
+    if (publicPage || pathname === '/whos-watching' || pathname === '/signup' || pathname === '/' || (!user.gesId && pathname === '/dashboard')) {
       router.replace(destination);
     }
   }, [ready, user, pathname, router]);
