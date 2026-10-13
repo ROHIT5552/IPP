@@ -337,6 +337,8 @@ model GES {
   peakRecordedDemandKva  Float?
   bessRequirement        String?
   notes                  String
+  plantAddress           String          @default("")
+  zoneConsumption        Json?
   contactName            String          @default("")
   contactEmail           String          @default("")
   contactPhone           String          @default("")
@@ -362,6 +364,38 @@ model GES {
   users                  User[]
   selections             GESIPPSelection[]
   commercialRequirements CommercialRequirement[]
+  questionnaireAnswers   QuestionnaireAnswer[]
+  tariffNegotiations     TariffNegotiation[]
+}
+
+model TariffNegotiation {
+  id          String   @id @default(cuid())
+  gesId       String
+  ippId       String
+  rounds      Json
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ges         GES      @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ipp         IPP      @relation(fields: [ippId], references: [id], onDelete: Cascade)
+
+  @@unique([gesId, ippId])
+}
+
+model QuestionnaireAnswer {
+  id          String   @id @default(cuid())
+  gesId       String
+  ges         GES      @relation(fields: [gesId], references: [id], onDelete: Cascade)
+  ippId       String?
+  ipp         IPP?     @relation(fields: [ippId], references: [id], onDelete: Cascade)
+  questionKey String
+  value       String   @default("")
+  rating      Float?
+  updatedById String   @default("")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([gesId, ippId, questionKey])
+  @@index([gesId, ippId])
 }
 
 model GESConsumer {
@@ -443,6 +477,13 @@ model IPP {
   codConfidence             String?
   financialModelAvailable   String?
   fundingStatus             String?
+  referenceNo               String   @default("")
+  loiScope                  String   @default("")
+  portfolioCapacity         String   @default("")
+  leadership                String   @default("")
+  keyContact                String   @default("")
+  cin                       String   @default("")
+  notes                     String   @default("")
   evaluationStage           EvaluationStage
   pendingFrom               String
   illustrative              Boolean  @default(true)
@@ -478,6 +519,8 @@ model IPP {
   dealbooks                 Dealbook[]
   selections                GESIPPSelection[]
   commercialRequirements    CommercialRequirement[]
+  tariffNegotiations        TariffNegotiation[]
+  questionnaireAnswers      QuestionnaireAnswer[]
 }
 
 model IPPProject {

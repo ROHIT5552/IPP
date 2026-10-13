@@ -5,13 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
-  ArrowUpRight,
   Bell,
-  BookOpen,
   ChevronDown,
   CircleHelp,
   ClipboardCheck,
-  LayoutDashboard,
   LogOut,
   Scale,
   Settings2,
@@ -27,29 +24,20 @@ import { api, listQuery } from '../services/api';
 import { GesAccount } from '../types/api';
 
 const staffPrimary = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/ges', label: 'GES', icon: UsersRound },
   { href: '/ipps', label: 'Independent power producer', icon: Sun },
+  { href: '/questionnaire', label: 'Questionnaire', icon: ClipboardCheck },
   { href: '/comparison', label: 'IPP comparator', icon: Scale },
 ];
 
 const customerPrimary = [
   { href: '/client/profile', label: 'GES profile', icon: UsersRound },
-  { href: '/client/requirements', label: 'GES requirement', icon: ClipboardCheck },
-  { href: '/client/ipps', label: 'IPP catalogue', icon: Sun },
-  { href: '/client/my-ipps', label: 'My IPPs', icon: BookOpen },
+  { href: '/client/ipps', label: 'Independent power producer', icon: Sun },
+  { href: '/questionnaire', label: 'Questionnaire', icon: ClipboardCheck },
   { href: '/comparison', label: 'IPP comparator', icon: Scale },
 ];
 
-const staffWorkflow = [
-  { href: '/profile', label: 'GES profile', icon: UsersRound },
-  { href: '/requirements', label: 'GES requirement', icon: ClipboardCheck },
-  { href: '/catalogue', label: 'Consider an IPP', icon: Sun },
-  { href: '/selections', label: 'Selected IPPs', icon: BookOpen },
-  { href: '/negotiation', label: 'Negotiation', icon: ArrowUpRight },
-  { href: '/psoa', label: 'PSOA evidence', icon: ClipboardCheck },
-  { href: '/dealbook', label: 'Dealbook', icon: BookOpen },
-];
+const staffWorkflow: { href: string; label: string; icon: typeof UsersRound }[] = [];
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -75,17 +63,15 @@ export function AppShell({ children }: PropsWithChildren) {
     selectGes(next);
   }, [user, accountsQuery.data, gesId, pathname, selectGes]);
   const customer = Boolean(user?.gesId);
-  const canManageGesAccess = user?.role === 'ADMIN' || user?.role === 'NEWRA_ADMIN';
-  const primaryNav = customer
-    ? customerPrimary
-    : [...staffPrimary, ...(canManageGesAccess ? [{ href: '/ges-access', label: 'GES access', icon: UsersRound }] : [])];
-  const workflowNav = customer ? [] : staffWorkflow;
+  const primaryNav = customer ? customerPrimary : staffPrimary;
+  const workflowNav = staffWorkflow;
   const accounts = (liveAccounts ?? []).filter((item) => !user?.gesId || item.id === user.gesId);
   const currentGes = accounts.find((item) => item.id === gesId) ?? accounts[0];
   const isActive = (href: string) => {
     if (href === '/ges') return pathname === '/ges' || pathname === '/ges/new' || pathname.endsWith('/edit') || /^\/ges\/[^/]+$/.test(pathname);
     if (href === '/ipps') return pathname.startsWith('/ipps');
     if (href === '/comparison') return pathname.includes('/comparison');
+    if (href === '/questionnaire') return pathname.startsWith('/questionnaire');
     if (href.startsWith('/client/')) return pathname === href || pathname.startsWith(`${href}/`);
     return pathname.endsWith(href);
   };
@@ -97,7 +83,7 @@ export function AppShell({ children }: PropsWithChildren) {
         ? currentGes?.name ?? 'GES'
         : 'Portfolio overview';
   const hrefFor = (href: string) =>
-    ['/comparison', '/negotiation', '/psoa', '/dealbook', '/profile', '/requirements', '/catalogue', '/selections'].includes(href)
+    ['/negotiation', '/psoa', '/dealbook', '/profile', '/requirements', '/catalogue', '/selections'].includes(href)
       ? `/ges/${currentGes?.id ?? gesId}${href}`
       : href;
   if (!ready || !user) return <NewraLoader label="Opening your workspace" />;
@@ -113,7 +99,7 @@ export function AppShell({ children }: PropsWithChildren) {
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Link href={customer ? '/client/profile' : '/dashboard'} className="brand">
+        <Link href={customer ? '/client/profile' : '/ges'} className="brand">
           <span className="brand-mark"><Zap size={19} fill="currentColor" /></span>
           <span>newra<span className="brand-dot">.</span><small>ENERGY DECISIONS</small></span>
         </Link>
@@ -184,10 +170,11 @@ export function PageHeader({
   eyebrow,
   title,
   description,
+  className,
   children,
-}: PropsWithChildren<{ eyebrow?: string; title: string; description?: string }>) {
+}: PropsWithChildren<{ eyebrow?: string; title: string; description?: string; className?: string }>) {
   return (
-    <div className="page-heading">
+    <div className={className ? `page-heading ${className}` : 'page-heading'}>
       <div>
         {eyebrow && <div className="eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>

@@ -292,7 +292,9 @@ export class AuthService {
   }
 
   async login(email: string, password: string, response: Response) {
-    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    const raw = email.trim().toLowerCase();
+    const lookup = raw === "newraadmin" || raw === "newraadmin@newra.grids" ? "admin@newragrids.com" : raw;
+    const user = await this.prisma.user.findUnique({ where: { email: lookup } });
     if (!user || !user.active || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException("Email or password is incorrect");
     }

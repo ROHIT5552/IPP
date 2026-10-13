@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import * as bcrypt from "bcrypt";
 import { Workbook } from "exceljs";
 import PDFDocument from "pdfkit";
 import { manualSeedIpp } from "../demo/catalog";
@@ -8,7 +9,9 @@ import { TariffDrivers } from "../domain/tariff";
 import { rebuildGes, rebuildPair } from "../persistence/rebuild";
 import { storeIpp } from "../persistence/store-ipp";
 import { PrismaService } from "../prisma/prisma.service";
+import { EVALUATION_PARAMETERS } from "../domain/parameters";
 import { AuditService } from "./audit.service";
+import { QuestionnaireService } from "./questionnaire.service";
 import { FinancialFeasibilityService, TariffSensitivityService } from "./domain.services";
 
 type Actor = { id: string; permissions: string[]; gesId?: string | null; roles?: string[]; name?: string };
@@ -26,6 +29,7 @@ export class EnergyService {
     private readonly audit: AuditService,
     private readonly tariffSensitivity: TariffSensitivityService,
     private readonly finance: FinancialFeasibilityService,
+    private readonly questionnaire: QuestionnaireService,
   ) {}
 
   async dashboard(gesId?: string, onlyThisGes = false) {
@@ -102,7 +106,7 @@ export class EnergyService {
     };
   }
 
-  listGes(onlyId?: string | null) {
+  listGes(onlyId?: string | null, includeLogin = false) {
     return this.prisma.gES.findMany({
       where: onlyId ? { id: onlyId } : {},
       include: { requirement: { include: { ipps: true } } },
@@ -114,6 +118,13 @@ export class EnergyService {
       });
       const createdOrder = [...rows].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime()).map((ges) => ges.id);
       const profiles = await loadGesProfiles(this.prisma, rows.map((ges) => ges.id));
+      const logins = includeLogin
+        ? await this.prisma.user.findMany({
+            where: { gesId: { in: rows.map((ges) => ges.id) }, active: true },
+            select: { gesId: true, email: true },
+            orderBy: { createdAt: "asc" },
+          })
+        : [];
       return rows.map((ges) => {
         const profile = profiles.get(ges.id);
         return {
@@ -135,6 +146,9 @@ export class EnergyService {
         peakRecordedDemandKva: profile?.peakRecordedDemandKva ?? null,
         bessRequirement: profile?.bessRequirement ?? null,
         notes: ges.notes,
+        plantAddress: ges.plantAddress,
+        zoneConsumption: parseZones(ges.zoneConsumption),
+        ...(includeLogin ? { loginEmail: logins.find((user) => user.gesId === ges.id)?.email ?? "" } : {}),
         ipps: matches
           .filter((match) => match.gesId === ges.id)
           .map((match) => ({
@@ -208,6 +222,8 @@ export class EnergyService {
         existingRenewableGwh: input.existingRenewableGwh,
         annualConsumptionGwh: input.annualConsumptionGwh,
         notes: input.notes,
+        plantAddress: input.plantAddress,
+        zoneConsumption: input.zoneConsumption as unknown as Prisma.InputJsonValue,
         illustrative: true,
         crmStage: "CLIENT_DISCOVERY",
         evaluationStage: "IPP_EVALUATION",
@@ -276,6 +292,7 @@ export class EnergyService {
       });
     }
     await saveGesProfile(this.prisma, id, input.profile);
+    await this.provisionGesLogin(id, input.name, body);
     await rebuildGes(this.prisma, id);
     await this.audit.log({ entity: "GES", entityId: id, action: "CREATE", newValue: { name: input.name }, userId: actor.id });
     return this.listGes();
@@ -298,6 +315,8 @@ export class EnergyService {
       existingRenewableGwh: current.existingRenewableGwh,
       annualConsumptionGwh: current.annualConsumptionGwh,
       notes: current.notes,
+      plantAddress: current.plantAddress,
+      zoneConsumption: parseZones(current.zoneConsumption),
       annualEnergyGwh: current.requirement.annualEnergyGwh,
       peakDemandMw: current.requirement.peakDemandMw,
       requiredCapacityGw: current.requirement.requiredCapacityGw,
@@ -322,6 +341,8 @@ export class EnergyService {
         existingRenewableGwh: input.existingRenewableGwh,
         annualConsumptionGwh: input.annualConsumptionGwh,
         notes: input.notes,
+        plantAddress: input.plantAddress,
+        zoneConsumption: input.zoneConsumption as unknown as Prisma.InputJsonValue,
         requirement: {
           update: {
             annualEnergyGwh: input.annualEnergyGwh,
@@ -353,6 +374,9 @@ export class EnergyService {
       data: { annualEnergyGwh: input.annualEnergyGwh, peakMw: input.peakDemandMw },
     });
     await saveGesProfile(this.prisma, id, input.profile);
+    if (!actor.gesId && typeof body.loginPassword === "string" && body.loginPassword.trim()) {
+      await this.resetGesPassword(id, body.loginPassword);
+    }
     await rebuildGes(this.prisma, id);
     await this.audit.log({ entity: "GES", entityId: id, action: "UPDATE", oldValue: { name: current.name }, newValue: { name: input.name }, userId: actor.id });
     return this.listGes();
@@ -431,6 +455,13 @@ export class EnergyService {
         estimatedCapexCr: options?.clientSafe ? null : ipp.capex && ipp.capex.totalInrCr > 0 ? ipp.capex.totalInrCr : null,
         fundingStatus: options?.clientSafe ? null : profile?.fundingStatus ?? null,
         financialModelAvailable: options?.clientSafe ? null : profile?.financialModelAvailable ?? null,
+        referenceNo: ipp.referenceNo,
+        loiScope: ipp.loiScope,
+        portfolioCapacity: ipp.portfolioCapacity,
+        leadership: ipp.leadership,
+        keyContact: ipp.keyContact,
+        cin: ipp.cin,
+        notes: ipp.notes,
         gesCount: options?.clientSafe ? 0 : selections.filter((item) => item.ippId === ipp.id && (!gesId || item.gesId === gesId)).length,
         gesNames: options?.clientSafe ? [] : selections.filter((item) => item.ippId === ipp.id && (!gesId || item.gesId === gesId)).map((item) => item.ges.name),
         selectedByCurrentGes: Boolean(gesId && selections.some((item) => item.ippId === ipp.id && item.gesId === gesId)),
@@ -441,6 +472,7 @@ export class EnergyService {
   }
 
   async createIpp(body: Record<string, unknown>, actor: Actor) {
+    if (body.mode === "register") return this.createRegisterIpp(body, actor);
     const draft = ippWrite(body);
     const id = `ipp_${Date.now()}`;
     const seeded = manualSeedIpp({
@@ -499,6 +531,7 @@ export class EnergyService {
   }
 
   async updateIpp(id: string, body: Record<string, unknown>, actor: Actor) {
+    if (body.mode === "register") return this.updateRegisterIpp(id, body, actor);
     const current = await this.prisma.iPP.findUnique({
       where: { id },
       include: { tariff: true, generation: true, technology: true, solarProfile: true, windProfile: true, bessProfile: true, project: true, execution: true, capex: true },
@@ -588,11 +621,113 @@ export class EnergyService {
   }
 
   async deleteGes(id: string, actor: Actor) {
+    if (actor.gesId) throw new ForbiddenException("Only NewRa can remove a GES account");
     const current = await this.prisma.gES.findUnique({ where: { id } });
     if (!current) throw new NotFoundException("GES account was not found");
     await this.prisma.gES.delete({ where: { id } });
     await this.audit.log({ entity: "GES", entityId: id, action: "DELETE", oldValue: { name: current.name }, userId: actor.id });
     return this.listGes();
+  }
+
+  async saveIppNotes(id: string, notes: string, actor: Actor) {
+    const current = await this.prisma.iPP.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!current) throw new NotFoundException("IPP was not found");
+    await this.prisma.iPP.update({ where: { id }, data: { notes: notes.trim() } });
+    await this.audit.log({ entity: "IPP", entityId: id, action: "UPDATE", oldValue: { name: current.name }, newValue: { notes: notes.trim() }, userId: actor.id });
+    return this.ippCatalog(actor.gesId, { clientSafe: Boolean(actor.gesId) });
+  }
+
+  private registerFields(body: Record<string, unknown>) {
+    return {
+      referenceNo: String(body.referenceNo ?? "").trim(),
+      loiScope: String(body.loiScope ?? "").trim(),
+      portfolioCapacity: String(body.portfolioCapacity ?? "").trim(),
+      headquarters: String(body.headquarters ?? body.headOffice ?? "").trim(),
+      leadership: String(body.leadership ?? "").trim(),
+      keyContact: String(body.keyContact ?? "").trim(),
+      cin: String(body.cin ?? "").trim(),
+      notes: String(body.notes ?? "").trim(),
+    };
+  }
+
+  private async createRegisterIpp(body: Record<string, unknown>, actor: Actor) {
+    const name = String(body.name ?? "").trim();
+    if (!name) throw new BadRequestException("IPP name is required");
+    const id = `ipp_${Date.now()}`;
+    const fields = this.registerFields(body);
+    const seeded = manualSeedIpp({
+      id,
+      name,
+      headquarters: fields.headquarters || "Not specified",
+      solarMw: 0,
+      windMw: 0,
+      bessMw: 0,
+      bessMwh: 0,
+      annualGenerationGwh: 1,
+      p90Gwh: 0,
+      quotedTariff: 1,
+      codYear: 2030,
+    });
+    await storeIpp(this.prisma, seeded);
+    await this.prisma.iPP.update({ where: { id }, data: fields });
+    const requirements = await this.prisma.gESRequirement.findMany();
+    for (const requirement of requirements) {
+      await this.prisma.gESRequirementIPP.create({
+        data: {
+          id: `link_${requirement.gesId}_${id}`,
+          gesRequirementId: requirement.id,
+          ippId: id,
+          compatibilityStatus: "CONDITIONAL",
+          illustrativeSeedStatus: "CONDITIONAL",
+        },
+      });
+    }
+    await this.audit.log({ entity: "IPP", entityId: id, action: "CREATE", newValue: { name }, userId: actor.id });
+    return this.ippCatalog();
+  }
+
+  private async updateRegisterIpp(id: string, body: Record<string, unknown>, actor: Actor) {
+    const current = await this.prisma.iPP.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!current) throw new NotFoundException("IPP was not found");
+    const name = String(body.name ?? current.name).trim();
+    if (!name) throw new BadRequestException("IPP name is required");
+    await this.prisma.iPP.update({ where: { id }, data: { name, legalName: name, ...this.registerFields(body) } });
+    await this.audit.log({ entity: "IPP", entityId: id, action: "UPDATE", oldValue: { name: current.name }, newValue: { name }, userId: actor.id });
+    return this.ippCatalog();
+  }
+
+  private async provisionGesLogin(gesId: string, gesName: string, body: Record<string, unknown>) {
+    const email = String(body.loginEmail ?? "").trim().toLowerCase();
+    const password = String(body.loginPassword ?? "");
+    if (!email.includes("@")) throw new BadRequestException("Enter the GES login email");
+    if (password.length < 8) throw new BadRequestException("Login password must be at least 8 characters");
+    const taken = await this.prisma.user.findUnique({ where: { email } });
+    if (taken) throw new BadRequestException("That login email is already in use");
+    const role = await this.prisma.role.findUnique({ where: { name: "GES_ADMIN" } });
+    if (!role) throw new BadRequestException("GES access is not ready yet");
+    await this.prisma.user.create({
+      data: {
+        id: `usr_${gesId}_login`,
+        email,
+        name: gesName,
+        title: gesName,
+        passwordHash: await bcrypt.hash(password, 10),
+        gesId,
+        active: true,
+        accessStatus: "APPROVED",
+        roles: { create: { roleId: role.id } },
+      },
+    });
+  }
+
+  private async resetGesPassword(gesId: string, password: string) {
+    if (password.trim().length < 8) throw new BadRequestException("Login password must be at least 8 characters");
+    const user = await this.prisma.user.findFirst({
+      where: { gesId, active: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!user) throw new BadRequestException("This GES does not have a login yet");
+    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(password, 10) } });
   }
 
   private async assertUniqueName(name: string, ignoreId?: string) {
@@ -1209,8 +1344,13 @@ export class EnergyService {
     const board = await this.ippBoard(gesId);
     const ranked = [...board].sort((left, right) => right.suitability - left.suitability);
     const linked = new Set(ranked.map((row) => row.id));
-    const requested = [...new Set(ippIds.filter(Boolean))].filter((id) => linked.has(id)).slice(0, 3);
-    const unique = requested.length ? requested : ranked.slice(0, 3).map((row) => row.id);
+    const questionnaireScoresAll = await this.questionnaire.factorScores(gesId, ranked.map((row) => row.id));
+    const scoredRanked = ranked
+      .map((row) => ({ id: row.id, name: row.name, overall: questionnaireOverall(questionnaireScoresAll.get(row.id)) }))
+      .filter((row) => row.overall != null)
+      .sort((left, right) => (right.overall ?? 0) - (left.overall ?? 0) || left.name.localeCompare(right.name));
+    const requested = [...new Set(ippIds.filter(Boolean))].filter((id) => linked.has(id)).slice(0, 4);
+    const unique = requested.length ? requested : (scoredRanked.length ? scoredRanked.slice(0, 4).map((row) => row.id) : ranked.slice(0, 4).map((row) => row.id));
     const matches = await this.prisma.loadMatchResult.findMany({ where: { gesId } });
     if (!unique.length) {
       const account = this.toGesAccount(ges, 0);
@@ -1241,10 +1381,30 @@ export class EnergyService {
     const gesProfiles = await loadGesProfiles(this.prisma, [ges.id]);
     const gesProfile = gesProfiles.get(ges.id);
     const account = this.toGesAccount(ges, average(board.map((row) => row.suitability)));
-    const radarData = (selected[0]?.radar ?? []).map((axis) => {
-      const row: Record<string, string | number> = { factor: axis.axis };
-      selected.forEach((ipp) => {
-        row[ipp.id] = ipp.radar.find((item) => item.key === axis.key)?.normalized ?? 0;
+    const questionnaireScores = new Map(unique.map((id) => [id, questionnaireScoresAll.get(id) ?? []]));
+    const quotedTariffs = await this.questionnaire.latestIppTariffs(gesId, unique);
+    const selectedIpps = selected.map((ipp) => {
+      const ratings = questionnaireScores.get(ipp.id);
+      const provider = applyFactorRatings(this.toProvider(ipp), ratings);
+      const gates = provider.evaluation.scored ? gatesFromRatings(ratings ?? []) : [];
+      const quoted = quotedTariffs.get(ipp.id);
+      return {
+        ...provider,
+        gates,
+        ipp: {
+          ...provider.ipp,
+          tariff: quoted ?? null,
+          register: registerForComparison(ipp, profiles.get(ipp.id)),
+          shortlisted: Boolean(ipp.link?.shortlisted),
+        },
+        requirementComparison: explainRequirement(ges.requirement, ipp, provider.suitability.dimensions),
+        shortlistEligibility: eligibilityFromGates(gates),
+      };
+    });
+    const radarData = (selectedIpps[0]?.evaluation.parameters ?? []).map((parameter) => {
+      const row: Record<string, string | number> = { factor: parameter.shortLabel };
+      selectedIpps.forEach((ipp) => {
+        row[ipp.ipp.id] = ipp.evaluation.parameters.find((item) => item.key === parameter.key)?.normalizedScore ?? 0;
       });
       return row;
     });
@@ -1262,22 +1422,23 @@ export class EnergyService {
         bessRequirement: gesProfile?.bessRequirement ?? null,
       },
       requirements: account.requirement,
-      providerOptions: ranked.map((row) => ({
-        id: row.id,
-        name: row.name,
-        code: IPP_CODES[row.id] ?? "IPP",
-        technology: row.technology.split(" + ").filter(Boolean),
-        suitability: row.suitability,
-      })),
-      selectedIpps: selected.map((ipp) => {
-        const provider = this.toProvider(ipp);
-        return {
-          ...provider,
-          ipp: { ...provider.ipp, register: registerForComparison(ipp, profiles.get(ipp.id)), shortlisted: Boolean(ipp.link?.shortlisted) },
-          requirementComparison: explainRequirement(ges.requirement, ipp, provider.suitability.dimensions),
-          shortlistEligibility: eligibilityFromGates(provider.gates),
-        };
-      }),
+      providerOptions: [...ranked]
+        .sort((left, right) => {
+          const leftScore = questionnaireOverall(questionnaireScoresAll.get(left.id));
+          const rightScore = questionnaireOverall(questionnaireScoresAll.get(right.id));
+          if (leftScore == null && rightScore == null) return 0;
+          if (leftScore == null) return 1;
+          if (rightScore == null) return -1;
+          return rightScore - leftScore;
+        })
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          code: IPP_CODES[row.id] ?? "IPP",
+          technology: row.technology.split(" + ").filter(Boolean),
+          suitability: row.suitability,
+        })),
+      selectedIpps,
       radarData,
       technologyMix: board.map((row) => ({
         id: row.id,
@@ -1348,6 +1509,7 @@ export class EnergyService {
       },
       evaluation: {
         overallScore: ipp.evaluation?.overallScore ?? 0,
+        scored: false,
         parameters: (ipp.evaluation?.parameters ?? []).map((parameter) => ({
           key: parameter.key,
           label: parameter.name,
@@ -1989,6 +2151,100 @@ function number(value: unknown, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function questionnaireOverall(ratings: { key: string; average: number; count: number }[] | undefined) {
+  if (!ratings?.some((item) => item.count > 0)) return null;
+  const byKey = new Map(ratings.map((item) => [item.key, item]));
+  return EVALUATION_PARAMETERS.reduce((total, parameter) => {
+    const factor = byKey.get(parameter.key);
+    if (!factor?.count) return total;
+    return total + (factor.average / 10) * parameter.weight;
+  }, 0);
+}
+
+function applyFactorRatings<T extends { evaluation: { overallScore: number; scored?: boolean; parameters: { key: string; label: string; shortLabel: string; score: number; normalizedScore: number; weight: number; weightedContribution: number; evidence: string; status: string; reviewer: string }[] } }>(
+  provider: T,
+  ratings: { key: string; average: number; count: number }[] | undefined,
+): T {
+  const blank = {
+    ...provider,
+    evaluation: {
+      ...provider.evaluation,
+      scored: false,
+      overallScore: 0,
+      parameters: provider.evaluation.parameters.map((parameter) => ({
+        ...parameter,
+        score: 0,
+        normalizedScore: 0,
+        weightedContribution: 0,
+      })),
+    },
+  };
+  if (!ratings?.some((item) => item.count > 0)) return blank;
+  const byKey = new Map(ratings.map((item) => [item.key, item]));
+  const base = provider.evaluation.parameters.length
+    ? provider.evaluation.parameters
+    : EVALUATION_PARAMETERS.map((parameter) => ({
+        key: parameter.key,
+        label: parameter.name,
+        shortLabel: parameter.short,
+        score: 0,
+        normalizedScore: 0,
+        weight: parameter.weight,
+        weightedContribution: 0,
+        evidence: "Questionnaire",
+        status: "QUESTIONNAIRE",
+        reviewer: "GES",
+      }));
+  const parameters = base.map((parameter) => {
+    const factor = byKey.get(parameter.key);
+    const weight = parameter.weight || EVALUATION_PARAMETERS.find((item) => item.key === parameter.key)?.weight || 0;
+    if (!factor?.count) {
+      return { ...parameter, weight, score: 0, normalizedScore: 0, weightedContribution: 0 };
+    }
+    return {
+      ...parameter,
+      weight,
+      score: round(factor.average / 2, 2),
+      normalizedScore: round(factor.average * 10, 2),
+      weightedContribution: round((factor.average / 10) * weight, 2),
+      evidence: "Questionnaire",
+      status: "QUESTIONNAIRE",
+      reviewer: "GES",
+    };
+  });
+  return {
+    ...provider,
+    evaluation: {
+      ...provider.evaluation,
+      parameters,
+      overallScore: round(parameters.reduce((total, parameter) => total + parameter.weightedContribution, 0), 2),
+      scored: true,
+    },
+  };
+}
+
+function gatesFromRatings(ratings: { key: string; average: number; count: number }[]) {
+  const byKey = new Map(ratings.filter((item) => item.count > 0).map((item) => [item.key, item.average]));
+  const linked = [
+    ["Financial Capacity", "financial"],
+    ["Execution Capability", "execution"],
+    ["EHV Connectivity", "ehv"],
+    ["Credible CAPEX", "capex"],
+    ["Sustainable PPA Tariff", "tariff"],
+    ["Realistic COD", "cod"],
+    ["Generation Methodology", "engineering"],
+    ["FDRE / Load Matching", "fdre"],
+    ["Regulatory Protection", "regulatory"],
+    ["NewRa SCADA / Scheduling Integration", "engineering"],
+  ] as const;
+  return linked.flatMap(([name, factor]) => {
+    const rating = byKey.get(factor);
+    if (rating == null) return [];
+    const status = rating >= 7 ? "PASS" : rating >= 4 ? "CONDITIONAL" : "FAIL";
+    return [{ name, status, rationale: `Section rating ${rating}/10` }];
+  });
+}
+
 function round(value: number, digits = 1) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -2046,6 +2302,8 @@ interface GesWrite {
   existingRenewableGwh: number;
   annualConsumptionGwh: number;
   notes: string;
+  plantAddress: string;
+  zoneConsumption: { period: "annual" | "monthly"; zones: { name: string; value: number }[] };
   annualEnergyGwh: number;
   peakDemandMw: number;
   requiredCapacityGw: number;
@@ -2063,6 +2321,19 @@ interface GesProfileWrite {
   solarConnectionType: string | null;
   peakRecordedDemandKva: number | null;
   bessRequirement: string | null;
+}
+
+function parseZones(value: unknown): { period: "annual" | "monthly"; zones: { name: string; value: number }[] } {
+  if (!value || typeof value !== "object") return { period: "annual", zones: [] };
+  const record = value as { period?: unknown; zones?: unknown };
+  const period = record.period === "monthly" ? "monthly" : "annual";
+  const zones = Array.isArray(record.zones)
+    ? record.zones.map((item) => {
+        const row = item as { name?: unknown; value?: unknown };
+        return { name: String(row?.name ?? "").trim(), value: Number(row?.value ?? 0) || 0 };
+      }).filter((item) => item.name)
+    : [];
+  return { period, zones };
 }
 
 function optionalNumber(value: unknown): number | null {
@@ -2090,15 +2361,11 @@ function technologiesFromPreference(value: unknown, current?: string[]): string[
 function gesInput(body: Record<string, unknown>, current?: Partial<GesWrite>): GesWrite {
   const name = String(body.name ?? current?.name ?? "").trim();
   if (!name) throw new BadRequestException("GES name is required");
-  const legalName = String(body.legalName ?? current?.legalName ?? "").trim();
-  if (!legalName) throw new BadRequestException("Legal name is required");
-  const businessType = String(body.businessType ?? current?.businessType ?? "").trim();
-  if (!businessType) throw new BadRequestException("Business type is required");
-  const city = String(body.location ?? body.city ?? current?.city ?? "").trim();
+  const legalName = String(body.legalName ?? current?.legalName ?? name).trim() || name;
+  const businessType = String(body.businessType ?? current?.businessType ?? "Industrial").trim() || "Industrial";
+  const city = String(body.location ?? body.city ?? body.plantAddress ?? current?.city ?? "").trim();
   const state = String(body.state ?? current?.state ?? "").trim();
   const discom = String(body.discom ?? current?.discom ?? "").trim();
-  if (!city || !state) throw new BadRequestException("City and state are required");
-  if (!discom) throw new BadRequestException("DISCOM is required");
   const annualConsumptionGwh = "annualConsumptionGwh" in body
     ? optionalNumber(body.annualConsumptionGwh) ?? 0
     : current?.annualConsumptionGwh ?? 0;
@@ -2138,6 +2405,8 @@ function gesInput(body: Record<string, unknown>, current?: Partial<GesWrite>): G
     existingRenewableGwh: optionalNumber(body.existingRenewableGwh) ?? current?.existingRenewableGwh ?? 0,
     annualConsumptionGwh,
     notes: String(body.notes ?? current?.notes ?? "").trim(),
+    plantAddress: String(body.plantAddress ?? current?.plantAddress ?? "").trim(),
+    zoneConsumption: "zoneConsumption" in body ? parseZones(body.zoneConsumption) : current?.zoneConsumption ?? { period: "annual", zones: [] },
     annualEnergyGwh,
     peakDemandMw,
     requiredCapacityGw: current?.requiredCapacityGw ?? 0,

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, ClipboardList, Eye, ListChecks, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../components/AppShell';
 import { ErrorState, PageSkeleton } from '../../components/DataState';
@@ -166,9 +166,6 @@ export default function GesListPage() {
                     <td>
                       <div className="row-actions">
                         <Link className="small-button icon-only" href={`/ges/${ges.id}`} aria-label={`View ${ges.name}`}><Eye size={12} /></Link>
-                        <Link className="small-button icon-only" href={`/ges/${ges.id}/requirements`} aria-label={`Requirements for ${ges.name}`}><ClipboardList size={12} /></Link>
-                        <Link className="small-button icon-only" href={`/ges/${ges.id}/selections`} aria-label={`Selected IPPs for ${ges.name}`}><ListChecks size={12} /></Link>
-                        <Link className="small-button icon-only" href={`/ges/${ges.id}/comparison`} aria-label={`Compare IPPs for ${ges.name}`}><ArrowLeftRight size={12} /></Link>
                         {canEdit && <Link className="small-button icon-only" href={`/ges/${ges.id}/edit`} aria-label={`Edit ${ges.name}`}><Pencil size={12} /></Link>}
                         {canEdit && <button className="danger-button icon-only" type="button" aria-label={`Delete ${ges.name}`} onClick={() => setPendingDelete(ges.id)}><Trash2 size={12} /></button>}
                       </div>

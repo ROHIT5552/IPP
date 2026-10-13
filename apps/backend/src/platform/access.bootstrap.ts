@@ -103,12 +103,16 @@ export class AccessBootstrap implements OnModuleInit {
   }
 
   private async ensureSuperAdmin() {
-    const email = process.env.SUPERADMIN_EMAIL?.trim() || "admin@example.com";
+    const email = "admin@newragrids.com";
     const role = await this.prisma.role.findUnique({ where: { name: "ADMIN" } });
     if (!role) return;
-    const passwordHash = await bcrypt.hash("newra#2026", 10);
+    const passwordHash = await bcrypt.hash("nrg@2026", 10);
+    const reservedId = "usr_newra_grids";
+    const existingByEmail = await this.prisma.user.findUnique({ where: { email } });
+    const existingById = await this.prisma.user.findUnique({ where: { id: reservedId } });
+    const existing = existingByEmail ?? existingById;
     const others = await this.prisma.user.findMany({
-      where: { email: { not: email }, roles: { some: { roleId: role.id } } },
+      where: { id: { not: existing?.id ?? reservedId }, roles: { some: { roleId: role.id } } },
       select: { id: true, email: true },
     });
     for (const other of others) {
@@ -120,8 +124,8 @@ export class AccessBootstrap implements OnModuleInit {
       });
       this.logger.log(`Removed superadmin login ${other.email}`);
     }
-    const existing = await this.prisma.user.findUnique({ where: { email } });
     const profile = {
+      email,
       name: "NewRa Grids",
       title: "NewRa Grids",
       passwordHash,
@@ -132,7 +136,7 @@ export class AccessBootstrap implements OnModuleInit {
     const user = existing
       ? await this.prisma.user.update({ where: { id: existing.id }, data: profile })
       : await this.prisma.user.create({
-          data: { id: "usr_newra_grids", email, ...profile, roles: { create: [{ roleId: role.id }] } },
+          data: { id: reservedId, ...profile, roles: { create: [{ roleId: role.id }] } },
         });
     if (existing) {
       await this.prisma.userRole.deleteMany({ where: { userId: user.id, roleId: { not: role.id } } });

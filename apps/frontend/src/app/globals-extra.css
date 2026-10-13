@@ -20,6 +20,9 @@
 .focus-select,.selector-field { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 6px 22px 6px 8px; border: 1px solid rgba(160,186,214,.22); border-radius: 999px; color: #8ea0b8; font-size: 10px; background: #0c1422; }
 .focus-select select,.selector-field select { max-width: 145px; appearance: none; border: 0; outline: 0; background: transparent; color: #f3f7fb; font-size: 10px; font-weight: 700; cursor: pointer; }
 .focus-select svg { position: absolute; right: 6px; pointer-events: none; }
+.questionnaire-ipp { max-width: none; min-height: 38px; gap: 10px; padding: 0 36px 0 16px; background: #101826; border-color: rgba(160,186,214,.4); color: #c5d0de; font-size: 12px; }
+.questionnaire-ipp select { width: min(380px, 36vw); max-width: 380px; min-width: 220px; height: 36px; padding-left: 6px; background-color: #101826; color: #f3f7fb; -webkit-text-fill-color: #f3f7fb; font-size: 13px; color-scheme: dark; }
+.questionnaire-ipp select option { background: #101826; color: #f7fbff; }
 .match-stat-row { display: flex; justify-content: space-between; gap: 6px; padding: 9px 10px; border: 1px solid rgba(160,186,214,.16); border-radius: 8px; background: #0c1422; color: #8ea0b8; font-size: 10px; }
 .match-stat-row strong { padding-left: 3px; color: #5eead4; }
 .interval-footnote { display: flex; align-items: flex-start; gap: 6px; margin-top: 7px; color: #8ea0b8; font-size: 10px; line-height: 1.5; }

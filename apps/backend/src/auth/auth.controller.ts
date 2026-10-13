@@ -5,7 +5,8 @@ import { Public } from "../common/http";
 import { AuthService } from "./auth.service";
 
 class LoginDto {
-  @IsEmail()
+  @IsString()
+  @MinLength(3)
   email!: string;
 
   @IsString()
