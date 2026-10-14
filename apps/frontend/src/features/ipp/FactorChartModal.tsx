@@ -137,7 +137,7 @@ export function FactorChartModal({
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="tariff-modal" role="dialog" aria-modal="true" aria-labelledby="factor-chart-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="tariff-modal factor-chart-modal" role="dialog" aria-modal="true" aria-labelledby="factor-chart-title" onMouseDown={(event) => event.stopPropagation()}>
         <header className="tariff-modal-head">
           <div>
             <p className="eyebrow">Capability profile</p>

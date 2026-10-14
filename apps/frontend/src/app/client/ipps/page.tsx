@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../components/AppShell';
 import { ErrorState, PageSkeleton } from '../../../components/DataState';
-import { FactorChartModal } from '../../../features/ipp/FactorChartModal';
+import { FactorChartModal } from '../../../features/ipp/FactorChartModal.lazy';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { api, listQuery } from '../../../services/api';
 import { IppCatalogRow } from '../../../types/api';

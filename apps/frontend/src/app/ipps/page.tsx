@@ -52,16 +52,35 @@ export default function IppRegisterPage() {
       <PageHeader eyebrow="INDEPENDENT POWER PRODUCER" title="Independent power producers" description="Company, scope, capacity, office, leadership, contact, and CIN.">
         {canCreate && <Link className="primary-button" href="/ipps/new"><Plus size={14} /> Add IPP</Link>}
       </PageHeader>
-      <section className="card">
+      <section className="card ipp-register">
         <div className="table-toolbar">
           <h2 className="card-title">Count <span className="count-badge">{filtered.length}</span></h2>
           <label className="search-field wide"><Search size={13} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search company, scope, CIN" aria-label="Search IPPs" /></label>
         </div>
         <div className="data-table-wrap">
           <table className="data-table">
+            <colgroup>
+              <col className="col-no" />
+              <col className="col-company" />
+              <col className="col-scope" />
+              <col className="col-capacity" />
+              <col className="col-office" />
+              <col className="col-lead" />
+              <col className="col-contact" />
+              <col className="col-cin" />
+              <col className="col-actions" />
+            </colgroup>
             <thead>
               <tr>
-                <th>No.</th><th>IPP / company</th><th>LOI scope</th><th>Portfolio / capacity</th><th>Head office</th><th>Leadership</th><th>Key contact</th><th>CIN</th><th></th>
+                <th>No.</th>
+                <th>Company</th>
+                <th>LOI scope</th>
+                <th>Capacity</th>
+                <th>Head office</th>
+                <th>Leadership</th>
+                <th>Contact</th>
+                <th>CIN</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>

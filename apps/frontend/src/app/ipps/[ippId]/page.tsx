@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
-import { FactorChartModal } from '../../../features/ipp/FactorChartModal';
+import { FactorChartModal } from '../../../features/ipp/FactorChartModal.lazy';
 import { useWorkspace } from '../../../features/workspace/WorkspaceProvider';
 import { toast } from 'sonner';
 import { AppShell, PageHeader } from '../../../components/AppShell';

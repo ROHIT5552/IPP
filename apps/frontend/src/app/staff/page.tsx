@@ -2,12 +2,14 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Zap } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import { BrandLockup } from '../../components/BrandLockup';
 import { NewraLoader } from '../../components/DataState';
-import { useAuth } from '../../features/auth/AuthProvider';
+import { useAuth, useHasSession } from '../../features/auth/AuthProvider';
 
 export default function StaffPage() {
   const { signIn, ready } = useAuth();
+  const hasSession = useHasSession();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,13 +31,13 @@ export default function StaffPage() {
     }
   }
 
-  if (!ready) return <NewraLoader label="Opening sign in" />;
+  if (hasSession && !ready) return <NewraLoader label="Opening sign in" />;
 
   return (
-    <main className="signin-page">
+    <main id="main" className="signin-page">
       <section className="signin-panel signin-panel-solo">
         <form className="signin-card" onSubmit={submit}>
-          <div className="gate-brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
+          <div className="gate-brand"><BrandLockup priority /></div>
           <h2>Sign in</h2>
           <label htmlFor="work-email">Email</label>
           <input id="work-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />

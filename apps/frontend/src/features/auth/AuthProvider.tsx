@@ -10,7 +10,8 @@ import {
   useState,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { api, tokenStore } from '../../services/api';
+import { isKnownPath, isPublicPath } from '../../app/routes';
+import { api, SESSION_EXPIRED, tokenStore } from '../../services/api';
 import { AuthUser } from '../../types/api';
 
 const RETURN_KEY = 'newra.ges-return';
@@ -59,8 +60,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (!ready || pathname === '/staff') return;
-    const publicPage = pathname === '/' || pathname === '/login' || pathname === '/signup';
+    const expire = () => {
+      setUser(null);
+      const current = window.location.pathname;
+      if (isKnownPath(current) && !isPublicPath(current)) router.replace('/login');
+    };
+    window.addEventListener(SESSION_EXPIRED, expire);
+    return () => window.removeEventListener(SESSION_EXPIRED, expire);
+  }, [router]);
+
+  useEffect(() => {
+    if (!ready || pathname === '/staff' || !isKnownPath(pathname)) return;
+    const publicPage = isPublicPath(pathname);
     if (!user) {
       if (!publicPage) router.replace('/login');
       return;
@@ -106,4 +117,13 @@ export function useAuth() {
   const value = useContext(AuthContext);
   if (!value) throw new Error('useAuth must be used inside AuthProvider.');
   return value;
+}
+
+/** True only after mount when a saved session exists. Public pages can render their HTML immediately. */
+export function useHasSession() {
+  const [hasSession, setHasSession] = useState(false);
+  useEffect(() => {
+    setHasSession(Boolean(tokenStore.get()));
+  }, []);
+  return hasSession;
 }

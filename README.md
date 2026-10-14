@@ -1,137 +1,100 @@
-# NEWRA GES–IPP Comparator
+# NewRa IPP Comparator
 
-NEWRA is a renewable-energy procurement workspace for matching a Group of Energy
-Users (GES) with Independent Power Producers (IPPs). The web app manages the
-procurement workflow; the API evaluates supplier data and persists the results
-in PostgreSQL. Seeded figures and demo accounts are for local development only.
+NewRa IPP Comparator is a local workspace for comparing independent power producers for a GES account. The website runs on your computer. The API scores the producers and stores the results in PostgreSQL.
 
-## Project structure
+## What you need
 
-This repository uses an `apps/` monorepo layout to keep the frontend and backend
-separate while sharing root-level development commands:
+- [Node.js](https://nodejs.org) LTS (this project uses Node 20 or newer) and npm
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/), with Docker running before you start
 
-```text
-apps/
-  backend/   NestJS API, Prisma schema/seed, domain calculations and API tests
-  frontend/  Next.js frontend, pages, feature components and web tests
-docs/        Supporting product and page/component documentation
-docker-compose.yml
-package.json
+Open PowerShell in this project folder for every command below.
+
+## 1. Install the app
+
+```powershell
+npm install --prefix apps/backend
+npm install --prefix apps/frontend
 ```
 
-## Current functionality
+## 2. Create the backend settings file
 
-- Role-based sign-in and access control, including GES-scoped consumer accounts.
-- Dashboard and management of GES profiles, renewable-energy requirements and
-  IPP supplier records/catalogues.
-- IPP evaluation, GES suitability, 15-minute load matching, tariff scenarios,
-  commercial and technical inputs, critical gates and red-flag reviews.
-- Comparison, shortlisting, supplier negotiations/offers, procurement documents,
-  PSOA and dealbook workflows.
-- PDF/XLSX exports for comparison and PDF dealbook export.
-- PostgreSQL persistence, audit events, API request validation and health check.
+```powershell
+Copy-Item apps/backend/.env.example apps/backend/.env
+```
 
-Evaluation and comparison calculations are performed by the API; the frontend
-renders the API's results.
+The example file already points at the local database on port `5435`. You can leave it as it is for local use. Do not commit `.env`.
 
-## Technology
+## 3. Start the database
 
-- **Frontend:** Next.js 14, React 18, TypeScript, TanStack Query, Recharts.
-- **Backend:** NestJS 10, TypeScript, Prisma 5.
-- **Database:** PostgreSQL 16.
-- **Testing:** Jest and Testing Library.
+```powershell
+docker compose up -d postgres
+```
 
-## Requirements
+Wait until Docker shows the Postgres container as healthy. The database name is `newra_comparator`. The local user and password are both `newra`.
 
-- Node.js and npm (use a current Node.js LTS release).
-- Docker Desktop with Docker Compose, or a compatible PostgreSQL 16 instance.
+## 4. Load the shared data
 
-## Local development
+Use the dump when you want the same GES accounts, producers, questionnaire ratings, and tariff rounds that are already in this copy of the project.
 
-Run the following commands from the repository root in PowerShell.
+```powershell
+Get-Content -Raw .\apps\backend\prisma\newra-comparator.sql | docker exec -i newra-comparator-postgres psql -U newra -d newra_comparator
+```
 
-1. Install the separate frontend and backend dependencies:
+Then create the Prisma client the API needs:
 
-   ```powershell
-   npm install --prefix apps/backend
-   npm install --prefix apps/frontend
-   ```
+```powershell
+npm run prisma:generate --prefix apps/backend
+```
 
-2. Configure the backend environment and start PostgreSQL:
+Do not run `npm run db:seed` after this. The seed loads a different demo set and will not match the dump.
 
-   ```powershell
-   Copy-Item apps/backend/.env.example apps/backend/.env
-   docker compose up -d postgres
-   ```
+If you do not have the dump file and only want an empty demo database, use this instead of the restore command:
 
-   The example configuration targets the local Compose database on port `5435`.
-   Replace the example JWT secrets in `apps/backend/.env` with long, random values.
-   Never use the example secrets or demo accounts outside local development.
+```powershell
+npm run prisma:generate --prefix apps/backend
+npm run db:migrate
+npm run db:seed
+```
 
-3. Generate the Prisma client, create/update the database schema and seed demo
-   data:
+## 5. Start the website and the API
 
-   ```powershell
-   npm run prisma:generate --prefix apps/backend
-   npm run db:migrate
-   npm run db:seed
-   ```
+Use two PowerShell windows. Leave both running.
 
-4. Start the API and frontend in two PowerShell terminals:
+```powershell
+npm run dev:api
+```
 
-   ```powershell
-   npm run dev:api
-   ```
+```powershell
+npm run dev:web
+```
 
-   ```powershell
-   npm run dev:web
-   ```
+Open [http://localhost:3010](http://localhost:3010).
 
-   Open [http://localhost:3010](http://localhost:3010). The API is available at
-   `http://localhost:4010/api`; its health endpoint is
-   `http://localhost:4010/api/health`.
+The API runs at [http://localhost:4010/api](http://localhost:4010/api). A quick check is [http://localhost:4010/api/health](http://localhost:4010/api/health).
 
-The frontend defaults to the local API URL. To use another API address, set
-`NEXT_PUBLIC_API_URL` in `apps/frontend/.env.local` (include the `/api` path).
+## Sign in
 
-## Demo accounts
+After the API starts, this local admin account is ready:
 
-The seed script creates local demo users. The shared demo password is
-`NewraDemo#2026`; it must only be used with the local seeded database.
+- Email: `admin@newragrids.com`
+- Password: `nrg@2026`
 
-Platform users include `admin@newra.demo`, `evaluator@newra.demo`,
-`commercial@newra.demo`, `technical@newra.demo`, `finance@newra.demo` and
-`viewer@newra.demo`. GES-scoped accounts are:
+The dump also includes the GES account `rohithiwrale5552@gmail.com` (Rohit H). Use the password that was set for that account. These logins are for this local database only.
 
-- `ges.aster@newra.demo` — Aster Manufacturing Group
-- `ges.nova@newra.demo` — Nova Industrial Works
-- `ges.vertex@newra.demo` — Vertex Metals & Engineering
-- `ges.helix@newra.demo` — Helix Chemicals
+## Other commands
 
-## Useful commands
-
-Run from the repository root:
-
-| Command | Purpose |
+| Command | What it does |
 | --- | --- |
-| `npm run db:up` | Start the PostgreSQL Compose service |
-| `npm run db:migrate` | Apply Prisma development migrations |
-| `npm run db:seed` | Seed local demo data |
-| `npm run dev:api` | Start the NestJS API in watch mode |
-| `npm run dev:web` | Start the Next.js frontend |
+| `npm run db:up` | Start the database |
+| `npm run dev:api` | Start the API |
+| `npm run dev:web` | Start the website |
 | `npm run build:api` | Build the API |
-| `npm run build:web` | Build the frontend |
-| `npm test` | Run API and frontend test suites |
-| `npm run test:api` | Run API tests |
-| `npm run test:web` | Run frontend tests |
+| `npm run build:web` | Build the website |
+| `npm test` | Run the API and website tests |
 
-## Data and security notes
+## If something does not start
 
-- All seeded profiles, load curves, tariffs and account credentials are
-  illustrative demo data.
-- The Compose database credentials are development defaults, not production
-  secrets. Use managed secrets, secure database credentials, and appropriate
-  deployment configuration for hosted environments.
-- The API uses access and refresh tokens, permission and GES-scope guards, input
-  validation, CORS configuration and HTTP security headers.
-- Do not commit `.env` or `.env.local` files.
+- Docker Desktop must be running before `docker compose up`.
+- If port `3010` or `4010` is already in use, stop the other copy of the app and start it again.
+- If the website cannot reach the API, check that the API window is still running.
+- To point the website at a different API, create `apps/frontend/.env.local` and set `NEXT_PUBLIC_API_URL` to an address that ends with `/api`.

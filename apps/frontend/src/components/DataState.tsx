@@ -1,13 +1,11 @@
-import { AlertTriangle, RefreshCw, Zap } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { BrandLockup } from './BrandLockup';
 
 export function NewraLoader({ label = 'Preparing your workspace' }: { label?: string }) {
   return (
     <div className="newra-loader" role="status" aria-live="polite">
-      <div className="newra-loader-mark" aria-hidden="true">
-        <span className="newra-loader-ring" />
-        <Zap size={28} fill="currentColor" />
-      </div>
-      <strong>NewRa Grids</strong>
+      <BrandLockup className="newra-loader-logo" alt="" priority />
+      <div className="newra-loader-dots" aria-hidden="true"><i /><i /><i /></div>
       <span>{label}</span>
     </div>
   );
@@ -79,7 +77,7 @@ export function PageSkeleton({
 }) {
   return (
     <div className="skeleton-page" role="status" aria-live="polite" aria-busy="true">
-      <span className="sr-only">NewRa Grids is loading this page</span>
+      <span className="sr-only">NewRa IPP Comparator is loading this page</span>
       {heading && <HeadingSkeleton />}
       {variant === 'dashboard' && (
         <>

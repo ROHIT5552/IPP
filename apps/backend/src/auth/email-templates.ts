@@ -53,7 +53,7 @@ export function signInCodeTemplate(input: SignInCodeEmail) {
     "If you did not try to sign in, ignore this email.",
     "",
     `Sent to ${input.to}`,
-    "NewRa Energy Decision Platform",
+    "NewRa IPP Comparator",
   ].join("\n");
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -62,7 +62,7 @@ export function signInCodeTemplate(input: SignInCodeEmail) {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f6;padding:28px 12px">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
-        <tr><td style="padding:22px 28px;background:#071018;color:#f7fbff;font:800 22px Arial,sans-serif">newra<span style="color:#e0a45a">.</span></td></tr>
+        <tr><td style="padding:22px 28px;background:#071018;color:#f7fbff;font:800 22px Arial,sans-serif">NewRa<span style="color:#e0a45a">.</span></td></tr>
         <tr><td style="padding:28px 28px 8px;font:700 22px Arial,sans-serif;color:#102033">${headline}</td></tr>
         <tr><td style="padding:8px 28px 0;font:16px/1.6 Arial,sans-serif;color:#3d4d5c">Hello ${name}, ${lead}</td></tr>
         <tr><td style="padding:22px 28px 6px">
@@ -75,7 +75,7 @@ export function signInCodeTemplate(input: SignInCodeEmail) {
           The code can be used once
         </td></tr>
         <tr><td style="padding:18px 28px 28px;font:14px/1.6 Arial,sans-serif;color:#5c6b7a">If you did not try to sign in, you can ignore this email. Nobody can enter the workspace without this code.</td></tr>
-        <tr><td style="padding:16px 28px 22px;background:#f6f8f8;font:12px/1.5 Arial,sans-serif;color:#6a7a86">Sent to ${email}<br>NewRa Energy Decision Platform</td></tr>
+        <tr><td style="padding:16px 28px 22px;background:#f6f8f8;font:12px/1.5 Arial,sans-serif;color:#6a7a86">Sent to ${email}<br>NewRa IPP Comparator</td></tr>
       </table>
     </td></tr>
   </table>
@@ -128,7 +128,7 @@ export function accessRequestTemplate(input: AccessLeadEmail) {
 <html lang="en"><body style="margin:0;padding:0;background:#eef3f6">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f6;padding:28px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
-      <tr><td style="padding:22px 28px;background:#071018;color:#f7fbff;font:800 22px Arial,sans-serif">newra<span style="color:#e0a45a">.</span></td></tr>
+      <tr><td style="padding:22px 28px;background:#071018;color:#f7fbff;font:800 22px Arial,sans-serif">NewRa<span style="color:#e0a45a">.</span></td></tr>
       <tr><td style="padding:28px 28px 8px;font:700 22px Arial,sans-serif;color:#102033">GES access permission</td></tr>
       <tr><td style="padding:8px 28px 0;font:16px/1.6 Arial,sans-serif;color:#3d4d5c">A person asked to use NewRa for their GES. They stay locked out until you accept.</td></tr>
       <tr><td style="padding:16px 28px;font:15px/1.7 Arial,sans-serif;color:#102033">
@@ -158,7 +158,7 @@ export function accessDecisionTemplate(input: { name: string; gesName: string; a
 <html lang="en"><body style="margin:0;padding:0;background:#eef3f6">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f6;padding:28px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
-      <tr><td style="padding:22px 28px;background:#071018;color:#f7fbff;font:800 22px Arial,sans-serif">newra<span style="color:#e0a45a">.</span></td></tr>
+      <tr><td style="padding:22px 28px;background:#071018;color:#f7fbff;font:800 22px Arial,sans-serif">NewRa<span style="color:#e0a45a">.</span></td></tr>
       <tr><td style="padding:28px 28px 8px;font:700 22px Arial,sans-serif;color:#102033">${input.accepted ? "Access approved" : "Access not approved"}</td></tr>
       <tr><td style="padding:8px 28px 28px;font:16px/1.6 Arial,sans-serif;color:#3d4d5c">Hello ${name}, ${input.accepted
         ? `NewRa Grids approved your GES role for ${gesName}. Sign in with this email address. We will send a 4-digit code.`
