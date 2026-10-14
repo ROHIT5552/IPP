@@ -2,15 +2,16 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Zap } from 'lucide-react';
+import { BrandLockup } from '../../components/BrandLockup';
 import { NewraLoader } from '../../components/DataState';
 import { AccessFlow, CodeStep, useCountdown } from '../../features/auth/ProfileGate';
-import { useAuth } from '../../features/auth/AuthProvider';
+import { useAuth, useHasSession } from '../../features/auth/AuthProvider';
 import { api } from '../../services/api';
 import { GesOtpChallenge } from '../../types/api';
 
 export default function SignupPage() {
   const { ready, user } = useAuth();
+  const hasSession = useHasSession();
   const [step, setStep] = useState<'email' | 'details' | 'code' | 'pending'>('email');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -58,12 +59,12 @@ export default function SignupPage() {
     }
   }
 
-  if (!ready || user) return <NewraLoader label="Opening your workspace" />;
+  if ((hasSession && !ready) || user) return <NewraLoader label="Opening your workspace" />;
 
   if (step === 'pending') {
     return (
-      <main className="gate-page">
-        <div className="gate-brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
+      <main id="main" className="gate-page">
+        <div className="gate-brand"><BrandLockup priority /></div>
         <section className="gate-card">
           <h1>Waiting for NewRa Grids</h1>
           <p>{emailSent
@@ -92,8 +93,8 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="gate-page">
-      <div className="gate-brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
+    <main id="main" className="gate-page">
+      <div className="gate-brand"><BrandLockup priority /></div>
       <form className="gate-card" onSubmit={step === 'email' ? (event) => { event.preventDefault(); setStep('details'); } : sendCode}>
         <div className="login-label">{step === 'email' ? 'STEP 1 OF 2' : 'STEP 2 OF 2'}</div>
         <h1>{step === 'email' ? 'Create your account' : 'Tell us who you are'}</h1>

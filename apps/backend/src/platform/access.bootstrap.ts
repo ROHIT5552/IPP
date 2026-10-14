@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
-import { DEMO_PASSWORD, ROLE_PERMISSIONS, USERS } from "../demo/catalog";
+import { ROLE_PERMISSIONS } from "../demo/catalog";
 import { PrismaService } from "../prisma/prisma.service";
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -73,31 +73,6 @@ export class AccessBootstrap implements OnModuleInit {
           create: { roleId: row.id, permissionId: `perm_${permission.toLowerCase()}` },
         });
       }
-    }
-    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-    for (const user of USERS) {
-      if (user.role === "ADMIN") continue;
-      const existing = await this.prisma.user.findUnique({ where: { email: user.email } });
-      if (existing) continue;
-      const role = await this.prisma.role.findUnique({ where: { name: user.role as never } });
-      if (!role) continue;
-      const gesId = "gesId" in user && user.gesId ? user.gesId : null;
-      if (gesId && !(await this.prisma.gES.findUnique({ where: { id: gesId }, select: { id: true } }))) {
-        this.logger.warn(`Skipped demo user ${user.email} because GES ${gesId} is not in this database`);
-        continue;
-      }
-      await this.prisma.user.create({
-        data: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          title: user.title,
-          passwordHash,
-          gesId,
-          roles: { create: [{ roleId: role.id }] },
-        },
-      });
-      this.logger.log(`Created demo user ${user.email}`);
     }
     await this.ensureSuperAdmin();
   }

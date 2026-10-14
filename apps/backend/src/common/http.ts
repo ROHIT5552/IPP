@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { Request, Response, NextFunction } from "express";
-import { Observable, map, tap } from "rxjs";
+import { Observable, catchError, map, tap, throwError } from "rxjs";
 
 export const IS_PUBLIC = "isPublic";
 export const PERMISSIONS_KEY = "permissions";
@@ -63,16 +63,20 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const started = Date.now();
+    const write = (statusCode: number) => {
+      console.log(JSON.stringify({
+        requestId: request.headers["x-request-id"],
+        method: request.method,
+        path: request.url,
+        statusCode,
+        durationMs: Date.now() - started,
+      }));
+    };
     return next.handle().pipe(
-      tap(() => {
-        const response = context.switchToHttp().getResponse<Response>();
-        console.log(JSON.stringify({
-          requestId: request.headers["x-request-id"],
-          method: request.method,
-          path: request.url,
-          statusCode: response.statusCode,
-          durationMs: Date.now() - started,
-        }));
+      tap(() => write(context.switchToHttp().getResponse<Response>().statusCode)),
+      catchError((error: unknown) => {
+        write(error instanceof HttpException ? error.getStatus() : 500);
+        return throwError(() => error);
       }),
     );
   }

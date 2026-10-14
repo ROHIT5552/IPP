@@ -133,7 +133,6 @@ export default function QuestionnairePage() {
   });
 
   const section = query.data?.sections.find((item) => item.id === active) ?? query.data?.sections[0];
-  const filled = useMemo(() => Object.values(answers).filter((value) => value.trim()).length, [answers]);
 
   function changeAnswer(question: Question, value: string) {
     const owner = query.data?.sections.find((item) => item.questions.some((itemQuestion) => itemQuestion.key === question.key));
@@ -154,13 +153,13 @@ export default function QuestionnairePage() {
   if (!accountId) {
     return (
       <AppShell>
-        <PageHeader eyebrow="JSMA" title="Questionnaire" description="Choose a GES account before answering." />
+        <PageHeader title="Questionnaire" description="Choose a GES account before answering." />
       </AppShell>
     );
   }
   if (ipps.isLoading || (ippId && query.isLoading)) return <AppShell><PageSkeleton variant="form" /></AppShell>;
   if (!orderedIpps.length) {
-    return <AppShell><PageHeader eyebrow="JSMA" title="Questionnaire" description="Add an IPP before answering the questionnaire." /></AppShell>;
+    return <AppShell><PageHeader title="Questionnaire" description="Add an IPP before answering the questionnaire." /></AppShell>;
   }
   if (query.isError || !query.data || !section) {
     return <AppShell><ErrorState message="The questionnaire could not be loaded." retry={() => void query.refetch()} /></AppShell>;
@@ -168,11 +167,7 @@ export default function QuestionnairePage() {
 
   return (
     <AppShell>
-      <PageHeader
-        eyebrow="JSMA shortlisting"
-        title="IPP selection questionnaire"
-        description={`${query.data.gesName} · ${query.data.ippName}. ${filled} of ${query.data.total} answers. Each section has one rating out of 10.`}
-      >
+      <PageHeader className="questionnaire-heading" title="IPP selection questionnaire">
         <label className="focus-select questionnaire-ipp">
           <span>IPP</span>
           <select value={ippId} onChange={(event) => setIppId(event.target.value)} aria-label="Questionnaire IPP">
@@ -180,12 +175,7 @@ export default function QuestionnairePage() {
           </select>
           <ChevronDown size={14} />
         </label>
-        <button className="secondary-button" type="button" onClick={() => setTariffOpen(true)}>Tariff and negotiation</button>
-        {canEdit && (
-          <button className="primary-button" type="submit" form="questionnaire-form" disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save answers'}
-          </button>
-        )}
+        <button className="secondary-button tariff-button" type="button" onClick={() => setTariffOpen(true)}>Tariff and negotiation</button>
       </PageHeader>
       <div className="questionnaire-layout">
         <nav className="card questionnaire-nav" aria-label="Questionnaire sections">
@@ -247,27 +237,29 @@ export default function QuestionnairePage() {
               })}
             </div>
             <label className="section-rating">
-              <span>
+              <span className="section-rating-copy">
                 <strong>Section rating</strong>
                 <small>One score out of 10 for this section. Saving it updates the IPP comparator.</small>
               </span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                step="0.1"
-                aria-label={`${section.title} rating out of 10`}
-                value={ratings[section.id] ?? ''}
-                disabled={!canEdit}
-                onChange={(event) => {
-                  setLockedRatings((current) => new Set(current).add(section.id));
-                  setRatings((current) => ({ ...current, [section.id]: event.target.value }));
-                }}
-              />
-              <em>/10</em>
+              <span className="section-score">
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step="0.1"
+                  aria-label={`${section.title} rating out of 10`}
+                  value={ratings[section.id] ?? ''}
+                  disabled={!canEdit}
+                  onChange={(event) => {
+                    setLockedRatings((current) => new Set(current).add(section.id));
+                    setRatings((current) => ({ ...current, [section.id]: event.target.value }));
+                  }}
+                />
+                <span aria-hidden="true">/10</span>
+              </span>
             </label>
             {canEdit && (
-              <div className="card-tools" style={{ justifyContent: 'flex-start', marginTop: 16 }}>
+              <div className="section-rating-actions">
                 <button className="primary-button" type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save answers'}</button>
               </div>
             )}

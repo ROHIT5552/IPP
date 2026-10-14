@@ -1,7 +1,8 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { Plus, Zap } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { BrandLockup } from '../../components/BrandLockup';
 import { GesLoginProfile } from '../../types/api';
 import { OtpFields, profileColor } from './OtpFields';
 
@@ -47,8 +48,8 @@ export function ProfileGate({
   }
 
   return (
-    <main className="gate-page">
-      <div className="gate-brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
+    <main id="main" className="gate-page">
+      <div className="gate-brand"><BrandLockup priority /></div>
       <h1>Who&apos;s signing in?</h1>
       <p>{gesName ? `${gesName} on this device` : 'Choose a profile to open the workspace'}</p>
       <div className="profile-row">
@@ -107,8 +108,8 @@ export function CodeStep({
   const [code, setCode] = useState('');
 
   return (
-    <main className="gate-page">
-      <div className="gate-brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span> newra<span className="brand-dot">.</span></div>
+    <main id="main" className="gate-page">
+      <div className="gate-brand"><BrandLockup priority /></div>
       <form className="gate-card" onSubmit={(event) => { event.preventDefault(); if (code.length === 4) onSubmit(code); }}>
         <h1>{title}</h1>
         <p>{detail}</p>

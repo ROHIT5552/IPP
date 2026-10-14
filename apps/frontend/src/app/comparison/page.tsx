@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { AppShell, PageHeader } from '../../components/AppShell';
 import { ErrorState, PageSkeleton } from '../../components/DataState';
 import { useAuth } from '../../features/auth/AuthProvider';
-import { FactorChartModal } from '../../features/ipp/FactorChartModal';
+import { FactorChartModal } from '../../features/ipp/FactorChartModal.lazy';
 import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
 import { api } from '../../services/api';
 
@@ -48,6 +48,19 @@ function gateSummary(ipp: ScoreIpp) {
   if (failed) return 'Fail';
   if (pending) return 'Conditional';
   return 'Pass';
+}
+
+function readable(value: string) {
+  const text = value.replaceAll('_', ' ').toLowerCase();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
+}
+
+function toneFor(value: string) {
+  const text = value.toLowerCase();
+  if (text === '—' || !text) return '';
+  if (text.includes('fail') || text.includes('unsustain') || text.includes('block')) return 'status-risk';
+  if (text.includes('pass') || text === 'sustainable' || text.includes('strong')) return 'status-good';
+  return 'status-warn';
 }
 
 export default function ComparisonPage() {
@@ -101,13 +114,17 @@ export default function ComparisonPage() {
       <section className="card">
         <div className="data-table-wrap">
           <table className="data-table scorecard">
+            <colgroup>
+              <col className="score-col-parameter" />
+              {columns.map((item) => <col key={item.ipp.id} />)}
+            </colgroup>
             <thead>
               <tr>
-                <th>Parameter</th>
+                <th scope="col">Parameter</th>
                 {columns.map((item, index) => (
-                  <th key={item.ipp.id}>
+                  <th key={item.ipp.id} scope="col">
                     <div className="score-head">
-                      IPP {index + 1}
+                      <span className="score-index">IPP {index + 1}</span>
                       <span className="number-sub">{item.ipp.name}</span>
                       <button className="small-button chart-button" type="button" onClick={() => setChart(item)}>View chart</button>
                     </div>
@@ -118,17 +135,20 @@ export default function ComparisonPage() {
             <tbody>
               {ROWS.map(([key, label, weight]) => (
                 <tr key={key}>
-                  <td>{label} /{weight}</td>
+                  <td>{label} <span>/{weight}</span></td>
                   {columns.map((item) => <td key={item.ipp.id}>{points(item, key) ?? '—'}</td>)}
                 </tr>
               ))}
-              <tr>
-                <td><strong>TOTAL /100</strong></td>
+              <tr className="score-total">
+                <td><strong>Total /100</strong></td>
                 {columns.map((item) => <td key={item.ipp.id}><strong>{item.evaluation.scored ? item.evaluation.overallScore : '—'}</strong></td>)}
               </tr>
               <tr>
                 <td>Critical Gates</td>
-                {columns.map((item) => <td key={item.ipp.id}>{item.evaluation.scored ? gateSummary(item) : '—'}</td>)}
+                {columns.map((item) => {
+                  const summary = item.evaluation.scored ? gateSummary(item) : '—';
+                  return <td key={item.ipp.id}>{summary === '—' ? '—' : <span className={`status-pill ${toneFor(summary)}`}>{summary}</span>}</td>;
+                })}
               </tr>
               <tr>
                 <td>Quoted Tariff</td>
@@ -136,11 +156,17 @@ export default function ComparisonPage() {
               </tr>
               <tr>
                 <td>NewRa Risk-Adjusted View</td>
-                {columns.map((item) => <td key={item.ipp.id}>{item.evaluation.scored ? item.tariff.sustainability || '—' : '—'}</td>)}
+                {columns.map((item) => {
+                  const view = item.evaluation.scored ? readable(item.tariff.sustainability || '—') : '—';
+                  return <td key={item.ipp.id}>{view === '—' ? '—' : <span className={`status-pill ${toneFor(view)}`}>{view}</span>}</td>;
+                })}
               </tr>
               <tr>
                 <td>Status</td>
-                {columns.map((item) => <td key={item.ipp.id}>{item.evaluation.scored ? (item.suitability.status || '—').replaceAll('_', ' ') : '—'}</td>)}
+                {columns.map((item) => {
+                  const status = item.evaluation.scored ? readable(item.suitability.status || '—') : '—';
+                  return <td key={item.ipp.id}>{status === '—' ? '—' : <span className={`status-pill ${toneFor(status)}`}>{status}</span>}</td>;
+                })}
               </tr>
             </tbody>
           </table>

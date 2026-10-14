@@ -5,21 +5,20 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
-  Bell,
   ChevronDown,
   CircleHelp,
   ClipboardCheck,
   LogOut,
   Scale,
-  Settings2,
   Sun,
   UsersRound,
-  Zap,
 } from 'lucide-react';
 import { PropsWithChildren, useEffect } from 'react';
+import { BrandLockup } from './BrandLockup';
 import { NewraLoader } from './DataState';
 import { useAuth } from '../features/auth/AuthProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { isKnownPath } from '../app/routes';
 import { api, listQuery } from '../services/api';
 import { GesAccount } from '../types/api';
 
@@ -75,7 +74,9 @@ export function AppShell({ children }: PropsWithChildren) {
     if (href.startsWith('/client/')) return pathname === href || pathname.startsWith(`${href}/`);
     return pathname.endsWith(href);
   };
-  const crumb = pathname.startsWith('/ipps')
+  const crumb = !isKnownPath(pathname)
+    ? 'Page not found'
+    : pathname.startsWith('/ipps')
     ? 'Independent power producer'
     : pathname === '/ges' || pathname === '/ges/new' || pathname.endsWith('/edit')
       ? 'GES'
@@ -99,9 +100,8 @@ export function AppShell({ children }: PropsWithChildren) {
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Link href={customer ? '/client/profile' : '/ges'} className="brand">
-          <span className="brand-mark"><Zap size={19} fill="currentColor" /></span>
-          <span>newra<span className="brand-dot">.</span><small>ENERGY DECISIONS</small></span>
+        <Link href={customer ? '/client/profile' : '/ges'} className="brand" aria-label="NewRa Grids">
+          <BrandLockup priority />
         </Link>
         <div className="nav-heading">PLATFORM</div>
         <nav className="nav-list">
@@ -136,10 +136,10 @@ export function AppShell({ children }: PropsWithChildren) {
           </button>
         </div>
       </aside>
-      <main className="main-shell">
+      <main id="main" className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
-            <span>Energy platform</span><span className="crumb-separator">/</span>
+            <span>NewRa IPP Comparator</span><span className="crumb-separator">/</span>
             <strong>{crumb}</strong>
           </div>
           <div className="topbar-actions">
@@ -154,8 +154,6 @@ export function AppShell({ children }: PropsWithChildren) {
                 </>
               )}
             </label>
-            <button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button>
-            <button className="icon-button" aria-label="Settings"><Settings2 size={18} /></button>
             <div className="top-avatar">{user?.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
           </div>
         </header>
